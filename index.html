@@ -4,7 +4,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=JetBrains+Mono:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=JetBrains+Mono:wght@400;600&display=swap">
 <style>
 /* layout: one full-screen terminal window; the bouquet lives on a WebGL canvas behind a thin PowerShell chrome */
 :root {
@@ -238,7 +238,7 @@ const COMP_FS = `#version 300 es
 precision highp float;
 in vec2 uv; out vec4 o;
 uniform sampler2D uScene, uBloom, uText;
-uniform vec2 uRes; uniform float uT, uWrite, uDpr;
+uniform vec2 uRes; uniform float uT, uWrite, uDpr; uniform vec3 uInkA, uInkB;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
   vec2 px = uv * uRes;
@@ -271,7 +271,7 @@ void main() {
   // "I love you Camila": the script letters filled with the same tiny words, writing themselves on
   float reveal = smoothstep(uWrite * uRes.x - 12.0 * uDpr, uWrite * uRes.x, px.x);
   float on = 1.0 - reveal;
-  vec3 ink = mix(vec3(1.0, 0.42, 0.78), vec3(0.78, 0.40, 1.0), 0.5 + 0.5 * sin(px.x * 0.012 - uT * 1.2));
+  vec3 ink = mix(uInkA, uInkB, 0.5 + 0.5 * sin(px.x * 0.012 - uT * 1.2));
   col += on * cur * (0.30 + 0.95 * words) * ink * 1.15;
   // scanlines and a slow light band
   float line = mod(floor(px.y / (1.5 * uDpr)), 2.0) < 1.0 ? 1.0 : 0.94;
@@ -282,7 +282,7 @@ void main() {
 }`;
 
 // ---------- the page ----------
-let W = 0, H = 0, dpr = 1, scaleK = 1, centerY = 0, sceneTex, sceneFbo, bloomA, bloomB, fA, fB, textTex;
+let W = 0, H = 0, SW = 0, SH = 0, sf = 1, dpr = 1, scaleK = 1, centerY = 0, sceneTex, sceneFbo, textTex;
 let SC, BL, CO, SP, vao, spVao, spCount = 0, count = 0;
 let ang = 0, vel = 0.30, dragging = false, lastX = 0, downX = 0, downT = 0, t0 = performance.now() / 1000;
 
@@ -327,19 +327,20 @@ function wordsAndScript(w, h) {
   for (let y = 0; y < h; y += lh) {
     let x = -((y * 37) % 90);
     while (x < w) {
-      const ph = (k % 5 === 4) ? "Camila" : PHRASES[(k - Math.floor(k / 5)) % PHRASES.length]; k++;
-      const s = ph + " \u2665 ";
+      const list = CUR.words;
+      const ph = (CUR.camila && k % 5 === 4) ? "Camila" : list[(k - (CUR.camila ? Math.floor(k / 5) : 0)) % list.length]; k++;
+      const s = ph + CUR.sep;
       g.fillText(s, x, y); x += Math.max(8, g.measureText(s).width);
     }
   }
   const words = g.getImageData(0, 0, w, h).data;
   // cursive layer
   g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
-  const line = "I love you Camila";
+  const line = CUR.line;
   let size = Math.round(h * 0.16);
-  g.font = "700 " + size + "px 'Dancing Script', 'Segoe Script', cursive";
+  g.font = CUR.weight + " " + size + "px " + CUR.font + ", 'Segoe Script', cursive";
   const tw = g.measureText(line).width;
-  if (tw > w * 0.9) { size = Math.floor(size * w * 0.9 / tw); g.font = "700 " + size + "px 'Dancing Script', 'Segoe Script', cursive"; }
+  if (tw > w * 0.9) { size = Math.floor(size * w * 0.9 / tw); g.font = CUR.weight + " " + size + "px " + CUR.font + ", 'Segoe Script', cursive"; }
   g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = "#fff";
   const by = h - Math.round(size * 0.42);
   g.fillText(line, w / 2, by);
@@ -361,9 +362,9 @@ function resize() {
   W = Math.max(64, Math.round(r.width * dpr * q)); H = Math.max(64, Math.round(r.height * dpr * q));
   dpr = dpr * q;
   canvas.width = W; canvas.height = H;
-  sceneTex = tex(W, H, gl.NEAREST); sceneFbo = fbo(sceneTex, true, W, H);
-  const bw = Math.max(8, W >> 2), bh = Math.max(8, H >> 2);
-  bloomA = tex(bw, bh, gl.LINEAR); fA = fbo(bloomA, false); bloomB = tex(bw, bh, gl.LINEAR); fB = fbo(bloomB, false);
+  // the 3D flowers only colour the words, so they render small and fast; words and sparkles stay full-res and sharp
+  sf = Math.min(1, 560 / W); SW = Math.max(32, Math.round(W * sf)); SH = Math.max(32, Math.round(H * sf));
+  sceneTex = tex(SW, SH, gl.LINEAR); sceneFbo = fbo(sceneTex, true, SW, SH);
   const t = wordsAndScript(W, H);
   textTex = tex(W, H, gl.LINEAR);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, t.img);
@@ -380,7 +381,7 @@ function typeLog(t) {
   const L = [
     "compiling renderer ...... WebGL2 / z-buffer / 24-bit",
     "today: " + META.label + " ..... " + META.count.toLocaleString("en-US") + " points",
-    "writing 'I love you' in " + PHRASES.length + " languages for Camila",
+    CUR.log,
   ];
   for (let i = 0; i < L.length; i++) if (t >= 2.0 + i * 0.28) html += '\n<span class="k">[ok]</span> <span class="d">' + L[i] + "</span>";
   return html;
@@ -398,29 +399,21 @@ function frame(nowMs) {
   const viewAng = ang + 0.22 * Math.sin(Math.max(0, tb) * 0.37);
   const pitch = 0.22 + 0.035 * Math.sin(Math.max(0, tb) * 0.29);
 
-  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo); gl.viewport(0, 0, W, H);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo); gl.viewport(0, 0, SW, SH);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   if (tb > 0) {
     gl.enable(gl.DEPTH_TEST); gl.useProgram(SC.p); gl.bindVertexArray(vao);
     gl.uniform1f(SC.u.uAng, viewAng); gl.uniform1f(SC.u.uPitch, pitch); gl.uniform1f(SC.u.uT, tb); gl.uniform1f(SC.u.uGrow, grow);
-    gl.uniform1f(SC.u.uScale, scaleK); gl.uniform1f(SC.u.uYC, (META.minY + META.maxY) * 0.5);
-    gl.uniform1f(SC.u.uSpacing, 0.0105); gl.uniform2f(SC.u.uRes, W, H); gl.uniform2f(SC.u.uCenter, W * 0.5, centerY);
+    gl.uniform1f(SC.u.uScale, scaleK * sf); gl.uniform1f(SC.u.uYC, (META.minY + META.maxY) * 0.5);
+    gl.uniform1f(SC.u.uSpacing, 0.0105); gl.uniform2f(SC.u.uRes, SW, SH); gl.uniform2f(SC.u.uCenter, W * 0.5 * sf, centerY * sf);
     gl.drawArrays(gl.POINTS, 0, count);
     gl.disable(gl.DEPTH_TEST);
   }
-  // bloom: quarter-size copy, blurred twice
-  const bw = Math.max(8, W >> 2), bh = Math.max(8, H >> 2);
-  gl.useProgram(BL.p); gl.viewport(0, 0, bw, bh);
-  const passes = [[sceneTex, fA, 0, 0], [bloomA, fB, 1 / bw, 0], [bloomB, fA, 0, 1 / bh], [bloomA, fB, 2 / bw, 0], [bloomB, fA, 0, 2 / bh]];
-  for (const [src, dst, dx, dy] of passes) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, dst); gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src);
-    gl.uniform1i(BL.u.uTex, 0); gl.uniform2f(BL.u.uDir, dx, dy); gl.drawArrays(gl.TRIANGLES, 0, 3);
-  }
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H); gl.useProgram(CO.p);
   gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneTex); gl.uniform1i(CO.u.uScene, 0);
-  gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloomA); gl.uniform1i(CO.u.uBloom, 1);
   gl.activeTexture(gl.TEXTURE2); gl.bindTexture(gl.TEXTURE_2D, textTex); gl.uniform1i(CO.u.uText, 2);
   gl.uniform2f(CO.u.uRes, W, H); gl.uniform1f(CO.u.uT, Math.max(0, tb)); gl.uniform1f(CO.u.uDpr, dpr);
+  gl.uniform3fv(CO.u.uInkA, CUR.inkA); gl.uniform3fv(CO.u.uInkB, CUR.inkB);
   gl.uniform1f(CO.u.uWrite, Math.max(0, Math.min(1.02, (tb - 3.6) / 3.0)));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
   if (tb > 0 && spCount > 0) {
@@ -433,7 +426,7 @@ function frame(nowMs) {
     gl.disable(gl.BLEND); gl.bindVertexArray(vao);
   }
 
-  const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.label + "    " + META.count.toLocaleString("en-US") + " points    " + PHRASES.length + " languages";
+  const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.label + "    " + META.count.toLocaleString("en-US") + " points    " + CUR.status;
   if (st !== lastStatus) { statusEl.textContent = st; lastStatus = st; }
   if (!hintShown && tb > 7.5) { hintEl.style.opacity = 1; hintShown = true; setTimeout(() => { hintEl.style.opacity = 0; }, 5000); }
   requestAnimationFrame(frame);
@@ -450,6 +443,8 @@ canvas.addEventListener("pointerup", e => {
   if (Math.abs(e.clientX - downX) < 8 && performance.now() - downT < 300) t0 = performance.now() / 1000 - 2.8;
 });
 canvas.addEventListener("pointercancel", () => { dragging = false; });
+// keep the phone from taking the drag for scrolling or pull-to-refresh, so dragging always spins the bouquet
+document.addEventListener("touchmove", e => { e.preventDefault(); }, { passive: false });
 
 // ---------- a new surprise every day: the bouquet, then cute things built from simple 3D shapes ----------
 const KINDS = ["bouquet", "teddy", "heart", "bunny", "cupcake", "kitty"];
@@ -461,6 +456,26 @@ function todaysKind() {
   const day = Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2026, 10, 18)) / 86400000);
   return KINDS[((day % KINDS.length) + KINDS.length) % KINDS.length];
 }
+// each day has its own words, its own little line, font and colours; the 87-language love words belong to the bouquet
+let CUR = null;
+const DAYS = {
+  bouquet: { words: PHRASES, camila: true, sep: " ♥ ", line: "I love you Camila", font: "'Dancing Script'", weight: "700",
+             inkA: [1.0, 0.42, 0.78], inkB: [0.78, 0.40, 1.0], log: "writing 'I love you' in " + PHRASES.length + " languages for Camila", status: PHRASES.length + " languages" },
+  teddy:   { words: ["hug", "cuddle", "♥", "warm", "safe with you", "my favorite", "hold me", "Camila", "always"], sep: " · ",
+             line: "A big hug for you", font: "'Pacifico'", weight: "400", inkA: [1.0, 0.72, 0.45], inkB: [1.0, 0.45, 0.65],
+             log: "wrapping a teddy bear in hugs for Camila", status: "made of hugs" },
+  heart:   { words: ["♥"], sep: " ", line: "You have my whole heart", font: "'Great Vibes'", weight: "400",
+             inkA: [1.0, 0.25, 0.45], inkB: [1.0, 0.55, 0.78], log: "filling a heart with tiny hearts for Camila", status: "made of hearts" },
+  bunny:   { words: ["boop", "hop", "♥", "soft", "sweet dreams", "cutie", "Camila", "❀"], sep: " · ",
+             line: "Some bunny loves you", font: "'Pacifico'", weight: "400", inkA: [1.0, 0.62, 0.85], inkB: [0.80, 0.62, 1.0],
+             log: "hopping in with boops for Camila", status: "made of boops" },
+  cupcake: { words: ["sweet", "sugar", "honey", "♥", "treat", "yum", "Camila", "sprinkles"], sep: " · ",
+             line: "You're the sweetest", font: "'Pacifico'", weight: "400", inkA: [1.0, 0.55, 0.80], inkB: [0.55, 0.95, 0.85],
+             log: "baking something sweet for Camila", status: "made of sugar" },
+  kitty:   { words: ["purr", "meow", "♥", "cozy", "mine", "boop", "Camila", "nap together"], sep: " · ",
+             line: "You're purrfect, Camila", font: "'Dancing Script'", weight: "700", inkA: [1.0, 0.65, 0.40], inkB: [1.0, 0.45, 0.70],
+             log: "teaching a kitty to purr for Camila", status: "made of purrs" },
+};
 const SP0 = 0.0105;
 function shapeBuilder() {
   const P = [];
@@ -587,6 +602,7 @@ async function start() {
   if (!gl) { fail("This bouquet needs WebGL2. Open it in Safari or Chrome on a recent phone."); return; }
   try {
     const kind = todaysKind();
+    CUR = DAYS[kind];
     const buf = kind === "bouquet" ? await loadPoints() : buildShape(kind);
     count = Math.floor(buf.byteLength / 14);
     SC = prog(SCENE_VS, SCENE_FS); BL = prog(QUAD_VS, BLUR_FS); CO = prog(QUAD_VS, COMP_FS); SP = prog(SPARK_VS, SPARK_FS);
@@ -597,7 +613,7 @@ async function start() {
     gl.enableVertexAttribArray(1); gl.vertexAttribPointer(1, 3, gl.BYTE, false, 14, 6);
     gl.enableVertexAttribArray(2); gl.vertexAttribPointer(2, 3, gl.UNSIGNED_BYTE, false, 14, 9);
     gl.enableVertexAttribArray(3); gl.vertexAttribPointer(3, 2, gl.UNSIGNED_BYTE, false, 14, 12);
-    try { await document.fonts.load("700 64px 'Dancing Script'"); await document.fonts.load("14px 'JetBrains Mono'"); } catch (e) {}
+    try { await document.fonts.load(CUR.weight + " 64px " + CUR.font); await document.fonts.load("14px 'JetBrains Mono'"); } catch (e) {}
     resize();
     let rt = 0;
     new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(resize, 120); }).observe(canvas);
