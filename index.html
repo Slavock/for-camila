@@ -132,14 +132,14 @@ layout(location=0) in vec3 aPos;
 layout(location=1) in vec3 aNrm;
 layout(location=2) in vec3 aCol;
 layout(location=3) in vec2 aMatBirth;
-uniform float uAng, uT, uGrow, uScale, uYC, uSpacing;
+uniform float uAng, uT, uGrow, uScale, uYC, uSpacing, uPitch;
 uniform vec2 uRes, uCenter;
 out vec3 vCol;
 const float D = 4.2;
 void main() {
   float mat = aMatBirth.x, birth = aMatBirth.y / 255.0;
   if (uGrow < 1.05 && birth > uGrow) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); gl_PointSize = 0.0; return; }
-  float ca = cos(uAng), sa = sin(uAng), cp = cos(0.22), sp = sin(0.22);
+  float ca = cos(uAng), sa = sin(uAng), cp = cos(uPitch), sp = sin(uPitch);
   vec3 P = aPos / 16000.0;
   float x = P.x * ca + P.z * sa, z = -P.x * sa + P.z * ca, y = P.y - uYC + 0.022 * sin(uT * 1.3);
   float y2 = y * cp - z * sp, z2 = y * sp + z * cp, zc = D - z2;
@@ -181,6 +181,43 @@ const SCENE_FS = `#version 300 es
 precision highp float;
 in vec3 vCol; out vec4 o;
 void main() { vec2 q = gl_PointCoord - 0.5; if (dot(q, q) > 0.25) discard; o = vec4(vCol, 1.0); }`;
+
+// sparkles streaming out of the flowers: computed entirely on the GPU from a start point, a direction and a phase
+const SPARK_VS = `#version 300 es
+layout(location=0) in vec3 aP0;
+layout(location=1) in vec3 aDir;
+layout(location=2) in vec3 aCol;
+layout(location=3) in vec3 aSeed;
+uniform float uAng, uT, uGrow, uScale, uYC, uPitch, uDpr;
+uniform vec2 uRes, uCenter;
+out vec3 vCol;
+const float D = 4.2, LIFE = 3.6;
+void main() {
+  float on = clamp((uGrow - 1.0) * 1.5, 0.0, 1.0);
+  float age = mod(uT * aSeed.y + aSeed.x * LIFE, LIFE);
+  vec3 P = aP0 + aDir * (age * 0.10 * (0.6 + aSeed.y)) + vec3(0.0, 0.035 * age * age, 0.0);
+  float ca = cos(uAng), sa = sin(uAng), cp = cos(uPitch), sp = sin(uPitch);
+  float x = P.x * ca + P.z * sa, z = -P.x * sa + P.z * ca, y = P.y - uYC + 0.022 * sin(uT * 1.3);
+  float y2 = y * cp - z * sp, z2 = y * sp + z * cp, zc = D - z2;
+  float k = uScale * D / zc;
+  vec2 s = uCenter + vec2(x * k, -y2 * k);
+  gl_Position = vec4(s.x / uRes.x * 2.0 - 1.0, 1.0 - s.y / uRes.y * 2.0, 0.0, 1.0);
+  float fade = smoothstep(0.0, 0.35, age) * (1.0 - smoothstep(LIFE * 0.45, LIFE, age));
+  float tw = 0.55 + 0.45 * sin(uT * 7.0 + aSeed.x * 40.0);
+  gl_PointSize = uDpr * (5.0 + 7.0 * aSeed.z) * (0.55 + 0.45 * fade);
+  vCol = mix(aCol, vec3(1.0, 0.95, 1.0), 0.55) * fade * tw * on;
+}`;
+const SPARK_FS = `#version 300 es
+precision highp float;
+in vec3 vCol; out vec4 o;
+void main() {
+  vec2 d = abs(gl_PointCoord - 0.5) * 2.0;
+  float core = 1.0 - smoothstep(0.0, 0.32, length(d));
+  float spikes = max((1.0 - smoothstep(0.0, 0.10, d.x)) * (1.0 - d.y), (1.0 - smoothstep(0.0, 0.10, d.y)) * (1.0 - d.x));
+  float a = max(core, spikes * 0.85);
+  if (a < 0.02) discard;
+  o = vec4(vCol * a, 1.0);
+}`;
 
 const QUAD_VS = `#version 300 es
 const vec2 V[3] = vec2[3](vec2(-1,-1), vec2(3,-1), vec2(-1,3));
@@ -236,7 +273,7 @@ void main() {
   vec3 ink = mix(vec3(1.0, 0.42, 0.78), vec3(0.78, 0.40, 1.0), 0.5 + 0.5 * sin(px.x * 0.012 - uT * 1.2));
   col += on * cur * (0.30 + 0.95 * words) * ink * 1.15;
   // scanlines and a slow light band
-  float line = mod(floor(px.y / (1.5 * uDpr)), 2.0) < 1.0 ? 1.0 : 0.90;
+  float line = mod(floor(px.y / (1.5 * uDpr)), 2.0) < 1.0 ? 1.0 : 0.94;
   float band = exp(-pow((px.y / uRes.y - fract(uT * 0.11) * 1.3 + 0.15) * 14.0, 2.0));
   col *= line * (1.0 + 0.15 * band);
   col = col / (1.0 + 0.12 * col) * 1.12;
@@ -245,8 +282,35 @@ void main() {
 
 // ---------- the page ----------
 let W = 0, H = 0, dpr = 1, scaleK = 1, centerY = 0, sceneTex, sceneFbo, bloomA, bloomB, fA, fB, textTex;
-let SC, BL, CO, vao, count = 0;
-let ang = 0, vel = 0.55, dragging = false, lastX = 0, downX = 0, downT = 0, t0 = performance.now() / 1000;
+let SC, BL, CO, SP, vao, spVao, spCount = 0, count = 0;
+let ang = 0, vel = 0.30, dragging = false, lastX = 0, downX = 0, downT = 0, t0 = performance.now() / 1000;
+
+function buildSparkles(buf) {
+  // pick points on the flowers (not stems or leaves) and send sparkles outward and upward from them
+  const dv = new DataView(buf), n = Math.floor(buf.byteLength / 14);
+  const yMin = META.minY + 0.55 * (META.maxY - META.minY);
+  const N = 260, data = new Float32Array(N * 12);
+  let got = 0, tries = 0;
+  while (got < N && tries < 200000) {
+    tries++;
+    const i = Math.floor(Math.random() * n), o = i * 14;
+    if (dv.getUint8(o + 12) !== 0) continue;
+    const x = dv.getInt16(o, true) / 16000, y = dv.getInt16(o + 2, true) / 16000, z = dv.getInt16(o + 4, true) / 16000;
+    if (y < yMin) continue;
+    const nx = dv.getInt8(o + 6) / 127, ny = dv.getInt8(o + 7) / 127, nz = dv.getInt8(o + 8) / 127;
+    const rl = Math.hypot(x, z) || 1;
+    let dx = nx * 0.5 + x / rl * 0.6, dy = Math.abs(ny) * 0.3 + 0.55, dz = nz * 0.5 + z / rl * 0.6;
+    const dl = Math.hypot(dx, dy, dz) || 1; dx /= dl; dy /= dl; dz /= dl;
+    data.set([x, y, z, dx, dy, dz, dv.getUint8(o + 9) / 255, dv.getUint8(o + 10) / 255, dv.getUint8(o + 11) / 255,
+              Math.random(), 0.55 + Math.random() * 0.6, Math.random()], got * 12);
+    got++;
+  }
+  spCount = got;
+  spVao = gl.createVertexArray(); gl.bindVertexArray(spVao);
+  const b = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+  for (let a = 0; a < 4; a++) { gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 3, gl.FLOAT, false, 48, a * 12); }
+  gl.bindVertexArray(null);
+}
 
 function wordsAndScript(w, h) {
   // R: rows of "I love you" in every language; G: the cursive line; B: its soft glow
@@ -290,9 +354,9 @@ function wordsAndScript(w, h) {
 }
 
 function resize() {
-  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  dpr = Math.min(window.devicePixelRatio || 1, 3);
   const r = canvas.getBoundingClientRect();
-  const q = Math.min(1, 1300 / Math.max(1, r.width * dpr));
+  const q = Math.min(1, 1600 / Math.max(1, r.width * dpr));
   W = Math.max(64, Math.round(r.width * dpr * q)); H = Math.max(64, Math.round(r.height * dpr * q));
   dpr = dpr * q;
   canvas.width = W; canvas.height = H;
@@ -327,14 +391,17 @@ function frame(nowMs) {
   const dt = lastNow ? Math.min(0.1, now - lastNow) : 0.016; lastNow = now;
   const html = typeLog(t);
   if (html !== lastLog) { logEl.innerHTML = html; lastLog = html; }
-  if (!dragging) { ang += vel * dt; vel += (0.55 - vel) * Math.min(1, dt * 1.5); }
+  if (!dragging) { ang += vel * dt; vel += (0.30 - vel) * Math.min(1, dt * 0.8); }
   const grow = (tb - 0.2) / 3.2;
+  // a soft, swaying turn and a gentle breathing tilt
+  const viewAng = ang + 0.22 * Math.sin(Math.max(0, tb) * 0.37);
+  const pitch = 0.22 + 0.035 * Math.sin(Math.max(0, tb) * 0.29);
 
   gl.bindFramebuffer(gl.FRAMEBUFFER, sceneFbo); gl.viewport(0, 0, W, H);
   gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
   if (tb > 0) {
     gl.enable(gl.DEPTH_TEST); gl.useProgram(SC.p); gl.bindVertexArray(vao);
-    gl.uniform1f(SC.u.uAng, ang); gl.uniform1f(SC.u.uT, tb); gl.uniform1f(SC.u.uGrow, grow);
+    gl.uniform1f(SC.u.uAng, viewAng); gl.uniform1f(SC.u.uPitch, pitch); gl.uniform1f(SC.u.uT, tb); gl.uniform1f(SC.u.uGrow, grow);
     gl.uniform1f(SC.u.uScale, scaleK); gl.uniform1f(SC.u.uYC, (META.minY + META.maxY) * 0.5);
     gl.uniform1f(SC.u.uSpacing, 0.0105); gl.uniform2f(SC.u.uRes, W, H); gl.uniform2f(SC.u.uCenter, W * 0.5, centerY);
     gl.drawArrays(gl.POINTS, 0, count);
@@ -355,6 +422,15 @@ function frame(nowMs) {
   gl.uniform2f(CO.u.uRes, W, H); gl.uniform1f(CO.u.uT, Math.max(0, tb)); gl.uniform1f(CO.u.uDpr, dpr);
   gl.uniform1f(CO.u.uWrite, Math.max(0, Math.min(1.02, (tb - 3.6) / 3.0)));
   gl.drawArrays(gl.TRIANGLES, 0, 3);
+  if (tb > 0 && spCount > 0) {
+    gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+    gl.useProgram(SP.p); gl.bindVertexArray(spVao);
+    gl.uniform1f(SP.u.uAng, viewAng); gl.uniform1f(SP.u.uPitch, pitch); gl.uniform1f(SP.u.uT, tb); gl.uniform1f(SP.u.uGrow, grow);
+    gl.uniform1f(SP.u.uScale, scaleK); gl.uniform1f(SP.u.uYC, (META.minY + META.maxY) * 0.5); gl.uniform1f(SP.u.uDpr, dpr);
+    gl.uniform2f(SP.u.uRes, W, H); gl.uniform2f(SP.u.uCenter, W * 0.5, centerY);
+    gl.drawArrays(gl.POINTS, 0, spCount);
+    gl.disable(gl.BLEND); gl.bindVertexArray(vao);
+  }
 
   const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.heads + " flowers    " + META.count.toLocaleString("en-US") + " points    " + PHRASES.length + " languages";
   if (st !== lastStatus) { statusEl.textContent = st; lastStatus = st; }
@@ -379,7 +455,8 @@ async function start() {
   try {
     const buf = await loadPoints();
     count = Math.floor(buf.byteLength / 14);
-    SC = prog(SCENE_VS, SCENE_FS); BL = prog(QUAD_VS, BLUR_FS); CO = prog(QUAD_VS, COMP_FS);
+    SC = prog(SCENE_VS, SCENE_FS); BL = prog(QUAD_VS, BLUR_FS); CO = prog(QUAD_VS, COMP_FS); SP = prog(SPARK_VS, SPARK_FS);
+    buildSparkles(buf);
     vao = gl.createVertexArray(); gl.bindVertexArray(vao);
     const vb = gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER, vb); gl.bufferData(gl.ARRAY_BUFFER, buf, gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0); gl.vertexAttribPointer(0, 3, gl.SHORT, false, 14, 0);
