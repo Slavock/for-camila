@@ -2,6 +2,14 @@
 <title>Bouquet for Camila</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="claude:viewport-fit-sides" content="cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="For Camila">
+<meta name="theme-color" content="#0c0c0c">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="icon" href="icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&family=Great+Vibes&family=Pacifico&family=JetBrains+Mono:wght@400;600&display=swap">
@@ -37,8 +45,10 @@ body {
 #log {
   flex: 0 0 auto; font-size: clamp(10px, 3.1vw, 14px); line-height: 1.55;
   padding: calc(env(safe-area-inset-top, 0px) + 12px) max(12px, env(safe-area-inset-right, 0px)) 4px max(12px, env(safe-area-inset-left, 0px));
-  white-space: pre; overflow: hidden; min-height: calc(4 * 1.55em);
+  white-space: pre; overflow: hidden; min-height: calc(5 * 1.55em);
 }
+#log .h { color: #ff8fc8; }
+#fx { pointer-events: none; }
 #log .c { color: var(--cmd); }
 #log .k { color: var(--ok); }
 #log .d { color: var(--dim); }
@@ -59,7 +69,8 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   <div id="log" aria-live="polite"></div>
   <div id="stage">
     <canvas id="gl" aria-label="A spinning bouquet of flowers written in the words I love you, for Camila"></canvas>
-    <div id="hint">drag to spin &middot; tap to grow it again</div>
+    <canvas id="fx" aria-hidden="true"></canvas>
+    <div id="hint">drag to spin &middot; tap for hearts &middot; double tap to grow it again</div>
     <div id="err" hidden></div>
   </div>
   <div id="status">&#9675; ready</div>
@@ -361,13 +372,14 @@ function resize() {
   // the 3D flowers only colour the words, so they render small and fast; words and sparkles stay full-res and sharp
   sf = Math.min(1, 560 / W); SW = Math.max(32, Math.round(W * sf)); SH = Math.max(32, Math.round(H * sf));
   sceneTex = tex(SW, SH, gl.LINEAR); sceneFbo = fbo(sceneTex, true, SW, SH);
+  sizeFx();
   const t = wordsAndScript(W, H);
   textTex = tex(W, H, gl.LINEAR);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, t.img);
   const avail = Math.max(40, t.textTop - 4);
   const hgt = (META.maxY - META.minY) + 0.08, wid = 2 * META.maxR + 0.10;
-  scaleK = Math.min(avail * 1.0 / hgt, W * 1.34 / wid);
-  centerY = avail * 0.5;
+  scaleK = Math.min(avail * (STILL ? 0.84 : 1.0) / hgt, W * (STILL ? 1.0 : 1.34) / wid);
+  centerY = avail * (STILL ? 0.53 : 0.5);
 }
 
 function typeLog(t) {
@@ -380,6 +392,9 @@ function typeLog(t) {
     CUR.log,
   ];
   for (let i = 0; i < L.length; i++) if (t >= 2.0 + i * 0.28) html += '\n<span class="k">[ok]</span> <span class="d">' + L[i] + "</span>";
+  // today's love note types itself out after the bouquet has grown
+  const note = todaysNote(), nt = Math.max(0, Math.min(note.length, Math.floor((t - 9.5) * 22)));
+  if (t >= 9.3) html += '\n<span class="h">[♥]</span> <span class="h">' + note.slice(0, nt).replace(/&/g, "&amp;").replace(/</g, "&lt;") + "</span>";
   return html;
 }
 
@@ -424,34 +439,93 @@ function frame(nowMs) {
 
   const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.label + "    " + META.count.toLocaleString("en-US") + " points    " + CUR.status;
   if (st !== lastStatus) { statusEl.textContent = st; lastStatus = st; }
-  if (!hintShown && tb > 7.5) { hintEl.style.opacity = 1; hintShown = true; setTimeout(() => { hintEl.style.opacity = 0; }, 5000); }
+  drawFx(dt, tb);
+  if (!hintShown && tb > 7.5 && !STILL) { hintEl.style.opacity = 1; hintShown = true; setTimeout(() => { hintEl.style.opacity = 0; }, 5000); }
   requestAnimationFrame(frame);
 }
 
-// spinning by hand: a finger anywhere on the screen (touch events), or a mouse on the canvas
-function dragStart(x) { dragging = true; lastX = downX = x; downT = performance.now(); }
-function dragMove(x) { if (!dragging) return; const dx = x - lastX; lastX = x; ang += dx * 0.012; vel = Math.max(-6, Math.min(6, dx * 0.6)); }
-function dragEnd(x) {
-  if (!dragging) return; dragging = false;
-  if (Math.abs(x - downX) < 8 && performance.now() - downT < 300) t0 = performance.now() / 1000 - 2.8;
+// ---------- little touches: heart bursts where she taps, shooting stars, a love note each day ----------
+const NOTES = [
+  "Every day with you is my favorite day.", "You make my heart smile.", "I'd pick you in every lifetime.",
+  "You're my safe place.", "Thinking about you, like always.", "Your laugh is my favorite sound.",
+  "You and me are my favorite story.", "I'm so lucky it's you.", "You look beautiful today. You always do.",
+  "I can't wait to see you.", "You're my sunshine on cloudy days.", "Holding your hand is my favorite thing.",
+  "You make ordinary days feel special.", "I love you more than yesterday.", "You're cuter than any cupcake.",
+  "My heart is all yours.", "I hope today is as sweet as you.", "You're my favorite notification.",
+  "Every flower here is for you.", "You're my person.", "Sending you a million hugs.",
+  "You make everything better.", "I'm proud of you, always.", "You and me, forever.",
+  "Smile, someone loves you a lot. Me.", "You're the best part of my day.", "Home is wherever you are.",
+  "You deserve all the flowers.", "Thank you for being you.", "I love you, Camila."
+];
+function dayIndex() { const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2026, 10, 18)) / 86400000); }
+function todaysNote() { const i = dayIndex(); return NOTES[((i % NOTES.length) + NOTES.length) % NOTES.length]; }
+
+const fx = document.getElementById("fx"), fg = fx.getContext("2d");
+const hearts = [], shooters = []; let nextShooter = 4;
+function sizeFx() { const r = fx.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 3); fx.width = Math.round(r.width * d); fx.height = Math.round(r.height * d); fg.setTransform(d, 0, 0, d, 0, 0); }
+function burst(cx, cy) {
+  const cols = ["#ff4f8b", "#ff8fc8", "#ffc2e0", "#c58bff", "#ff2d55", "#ffffff"];
+  for (let i = 0; i < 26; i++) {
+    const a = Math.random() * Math.PI * 2, s = 60 + Math.random() * 170;
+    hearts.push({ x: cx, y: cy, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 90, r: (Math.random() - 0.5) * 0.8, vr: (Math.random() - 0.5) * 3,
+                  size: 10 + Math.random() * 16, col: cols[i % cols.length], age: 0, life: 1.4 + Math.random() * 0.8 });
+  }
 }
-window.addEventListener("touchstart", e => { dragStart(e.changedTouches[0].clientX); }, { passive: true });
+function drawFx(dt, tb) {
+  const r = fx.getBoundingClientRect();
+  fg.clearRect(0, 0, r.width, r.height);
+  if (tb > 6 && tb > nextShooter) {
+    shooters.push({ x: r.width * (0.3 + Math.random() * 0.7), y: r.height * Math.random() * 0.35, age: 0 });
+    nextShooter = tb + 7 + Math.random() * 7;
+  }
+  for (let i = shooters.length - 1; i >= 0; i--) {
+    const s = shooters[i]; s.age += dt;
+    const p = s.age / 0.9; if (p >= 1) { shooters.splice(i, 1); continue; }
+    const hx = s.x - p * 260, hy = s.y + p * 150, tx = hx + 90, ty = hy - 52;
+    const g = fg.createLinearGradient(hx, hy, tx, ty);
+    g.addColorStop(0, "rgba(255,240,250," + (1 - p) + ")"); g.addColorStop(1, "rgba(255,180,230,0)");
+    fg.strokeStyle = g; fg.lineWidth = 1.6; fg.beginPath(); fg.moveTo(hx, hy); fg.lineTo(tx, ty); fg.stroke();
+  }
+  for (let i = hearts.length - 1; i >= 0; i--) {
+    const h = hearts[i]; h.age += dt;
+    if (h.age > h.life) { hearts.splice(i, 1); continue; }
+    h.vy += 40 * dt; h.vx *= 1 - 1.2 * dt; h.vy *= 1 - 1.2 * dt; h.x += h.vx * dt; h.y += h.vy * dt; h.r += h.vr * dt;
+    fg.save(); fg.globalAlpha = Math.max(0, 1 - h.age / h.life); fg.translate(h.x, h.y); fg.rotate(h.r);
+    fg.fillStyle = h.col; fg.font = "bold " + h.size + "px 'Segoe UI Symbol', 'Apple Color Emoji', sans-serif";
+    fg.textAlign = "center"; fg.textBaseline = "middle"; fg.fillText("♥", 0, 0); fg.restore();
+  }
+}
+
+// spinning by hand: a finger anywhere on the screen (touch events), or a mouse on the canvas
+let downY = 0, lastTap = 0;
+function dragStart(x, y) { dragging = true; lastX = downX = x; downY = y; downT = performance.now(); }
+function dragMove(x) { if (!dragging) return; const dx = x - lastX; lastX = x; ang += dx * 0.012; vel = Math.max(-6, Math.min(6, dx * 0.6)); }
+function dragEnd(x, y) {
+  if (!dragging) return; dragging = false;
+  if (Math.abs(x - downX) < 8 && performance.now() - downT < 300) {
+    const now = performance.now();
+    if (now - lastTap < 350) t0 = now / 1000 - 2.8;          // double tap: grow it again
+    else { const r = fx.getBoundingClientRect(); burst(x - r.left, y - r.top); }
+    lastTap = now;
+  }
+}
+window.addEventListener("touchstart", e => { const t = e.changedTouches[0]; dragStart(t.clientX, t.clientY); }, { passive: true });
 window.addEventListener("touchmove", e => { e.preventDefault(); dragMove(e.changedTouches[0].clientX); }, { passive: false });
-window.addEventListener("touchend", e => { dragEnd(e.changedTouches[0].clientX); }, { passive: true });
+window.addEventListener("touchend", e => { const t = e.changedTouches[0]; dragEnd(t.clientX, t.clientY); }, { passive: true });
 window.addEventListener("touchcancel", () => { dragging = false; }, { passive: true });
-canvas.addEventListener("pointerdown", e => { if (e.pointerType === "touch") return; dragStart(e.clientX); try { canvas.setPointerCapture(e.pointerId); } catch (_) {} });
+canvas.addEventListener("pointerdown", e => { if (e.pointerType === "touch") return; dragStart(e.clientX, e.clientY); try { canvas.setPointerCapture(e.pointerId); } catch (_) {} });
 canvas.addEventListener("pointermove", e => { if (e.pointerType !== "touch") dragMove(e.clientX); });
-canvas.addEventListener("pointerup", e => { if (e.pointerType !== "touch") dragEnd(e.clientX); });
+canvas.addEventListener("pointerup", e => { if (e.pointerType !== "touch") dragEnd(e.clientX, e.clientY); });
 canvas.addEventListener("pointercancel", e => { if (e.pointerType !== "touch") dragging = false; });
 
 // ---------- a new surprise every day: the bouquet, then cute things built from simple 3D shapes ----------
 const KINDS = ["bouquet", "teddy", "heart", "bunny", "cupcake", "kitty"];
+const STILL = new URLSearchParams(location.search).has("still");
 const LABELS = { bouquet: "50 flowers", teddy: "a teddy bear", heart: "a heart", bunny: "a bunny", cupcake: "a cupcake", kitty: "a kitty" };
 function todaysKind() {
   const h = (location.hash || "").replace("#", "");
   if (KINDS.includes(h)) return h;
-  const d = new Date();
-  const day = Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2026, 10, 18)) / 86400000);
+  const day = dayIndex();
   return KINDS[((day % KINDS.length) + KINDS.length) % KINDS.length];
 }
 // each day has its own words, its own little line, font and colours; the 87-language love words belong to the bouquet
@@ -601,6 +675,7 @@ async function start() {
   try {
     const kind = todaysKind();
     CUR = DAYS[kind];
+    if (STILL) { logEl.hidden = true; statusEl.hidden = true; }
     const buf = kind === "bouquet" ? await loadPoints() : buildShape(kind);
     count = Math.floor(buf.byteLength / 14);
     SC = prog(SCENE_VS, SCENE_FS); BL = prog(QUAD_VS, BLUR_FS); CO = prog(QUAD_VS, COMP_FS); SP = prog(SPARK_VS, SPARK_FS);
@@ -615,7 +690,8 @@ async function start() {
     resize();
     let rt = 0;
     new ResizeObserver(() => { clearTimeout(rt); rt = setTimeout(resize, 120); }).observe(canvas);
-    t0 = performance.now() / 1000;
+    // ?still renders the fully grown artwork straight away (used to make the daily widget pictures)
+    t0 = performance.now() / 1000 - (STILL ? 2.8 + 9.0 : 0);
     requestAnimationFrame(frame);
   } catch (e) {
     fail("The bouquet could not start: " + (e && e.message ? e.message : e));
