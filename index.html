@@ -70,7 +70,6 @@ canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block
   <div id="stage">
     <canvas id="gl" aria-label="A spinning bouquet of flowers written in the words I love you, for Camila"></canvas>
     <canvas id="fx" aria-hidden="true"></canvas>
-    <div id="hint">drag to spin &middot; double tap to grow it again</div>
     <div id="err" hidden></div>
   </div>
   <div id="status">&#9675; ready</div>
@@ -85,7 +84,6 @@ const PHRASES = ["I love you", "Te amo", "Je t'aime", "Ich liebe dich", "Ti amo"
 
 const logEl = document.getElementById("log");
 const statusEl = document.getElementById("status");
-const hintEl = document.getElementById("hint");
 const canvas = document.getElementById("gl");
 const errEl = document.getElementById("err");
 
@@ -260,7 +258,11 @@ void main() {
   float mx = max(c.r, max(c.g, c.b));
   float k = (0.50 + 0.62 * mx) / max(mx, 0.001);
   float wave = 0.86 + 0.14 * sin(uT * 2.2 - px.x * 0.035 + px.y * 0.02);
-  vec3 col = geo * step(0.05, mx) * words * min(c * k, vec3(1.0)) * 1.05 * wave;
+  // like the PowerShell hologram: the real shaded flower shows through, and the love words run through it a little brighter
+  vec3 fill = geo * c * 0.62;
+  float kw = (0.22 + 0.80 * mx) / max(mx, 0.001);
+  vec3 lit = geo * step(0.03, mx) * min(c * kw, vec3(1.0)) * wave;
+  vec3 col = mix(fill, lit, words * 0.85);
   // stars, with small four-point spikes, away from the flowers
   if (geo < 0.5) {
     float cell = 46.0 * uDpr;
@@ -374,7 +376,7 @@ function resize() {
   dpr = dpr * q;
   canvas.width = W; canvas.height = H;
   // the 3D flowers only colour the words, so they render small and fast; words and sparkles stay full-res and sharp
-  sf = Math.min(1, 560 / W); SW = Math.max(32, Math.round(W * sf)); SH = Math.max(32, Math.round(H * sf));
+  sf = Math.min(1, 900 / W); SW = Math.max(32, Math.round(W * sf)); SH = Math.max(32, Math.round(H * sf));
   sceneTex = tex(SW, SH, gl.LINEAR); sceneFbo = fbo(sceneTex, true, SW, SH);
   sizeFx();
   const t = wordsAndScript(W, H);
@@ -445,7 +447,6 @@ function frame(nowMs) {
   const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.label + "    " + META.count.toLocaleString("en-US") + " points    " + CUR.status;
   if (st !== lastStatus) { statusEl.textContent = st; lastStatus = st; }
   drawFx(dt, tb);
-  if (!hintShown && tb > 7.5 && !STILL) { hintEl.style.opacity = 1; hintShown = true; setTimeout(() => { hintEl.style.opacity = 0; }, 5000); }
   requestAnimationFrame(frame);
 }
 
