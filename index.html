@@ -515,7 +515,7 @@ function frame(nowMs) {
 // ---------- little touches: heart bursts where she taps, shooting stars, a love note each day ----------
 const NOTES = [
   "I hope today is as beautiful as you are",
-  "You walk in beauty, like the night of starry skies",
+  "I hope your day is beautiful",
   "I hope you smiled today",
   "The stars came out tonight just to look at you",
   "Thinking about you, like always",
@@ -545,6 +545,7 @@ const NOTES = [
   "Every day with you is a good day",
   "I hope the sun is kind to you today",
   "You make me want to be better",
+  "You walk in beauty, like the night of starry skies",
   "Sending you a hug from here",
   "I hope someone makes you laugh today",
   "You're beautiful, inside and out",
@@ -602,7 +603,7 @@ const VID_SPIN = 0.55;                 // radians per second in the recording (b
 let pv = null;
 // his window's style on most days; cubes, code and fine on others; the florist bouquets from his TikTok in between
 const BOUQUETS = ["bouquet", "crimson", "wildred", "magenta", "obsession", "ivory", "rosepink", "ember", "peach",
-                  "rust", "sunflower", "wine", "sunset", "pastel", "midnight", "coral"],
+                  "rust", "sunflower", "wine", "dahlia", "sunset", "pastel", "midnight", "coral"],
       STYLES = ["window", "cubes", "code", "fine", "trippy"];
 const OPEN4 = ["bouquet", "crimson", "wildred", "magenta"];
 const stylesOf = b => OPEN4.includes(b) ? STYLES : ["window", "cubes", "code", "trippy"];   // which recordings exist
@@ -612,18 +613,23 @@ let SCHEDULE = [["bouquet", "window"], ["crimson", "window"], ["sunflower", "win
                   ["rosepink", "window"], ["ember", "window"], ["magenta", "window"], ["peach", "window"], ["midnight", "code"],
                   ["bouquet", "fine"], ["sunflower", "cubes"], ["wildred", "code"], ["coral", "cubes"]];
 // his own picks (hearted in the gallery) arrive as schedule.json next to the page: {"from": <day index>, "days": ["rust-window", ...]}
-let SCHED_FROM = 0;
+let SCHED_FROM = 0, TODAY_PICK = null, PICK_LINE = null;
 async function loadSchedule() {
   try {
     const r = await fetch("schedule.json", { cache: "no-cache" });
     if (!r.ok) return;
     const j = await r.json();
-    const days = (j.days || []).map(x => String(x).split("-")).filter(x => BOUQUETS.includes(x[0]) && stylesOf(x[0]).includes(x[1]));
+    const norm = x => typeof x === "string" ? x.split("-") : [x.b, x.style, x.line];
+    const ok = x => BOUQUETS.includes(x[0]) && stylesOf(x[0]).includes(x[1]);
+    const days = (j.days || []).map(norm).filter(ok);
     if (days.length) { SCHEDULE = days; SCHED_FROM = +j.from || 0; }
+    const d = new Date(), iso = d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+    if (j.today && j.today.date === iso && ok(norm(j.today))) TODAY_PICK = norm(j.today);
   } catch (e) {}
 }
 function todaysPick() {
-  const d = dayIndex() - SCHED_FROM, sc = SCHEDULE[((d % SCHEDULE.length) + SCHEDULE.length) % SCHEDULE.length];
+  const d = dayIndex() - SCHED_FROM, sc = TODAY_PICK || SCHEDULE[((d % SCHEDULE.length) + SCHEDULE.length) % SCHEDULE.length];
+  PICK_LINE = QP.has("vid") ? null : (sc[2] || null);
   const b = BOUQUETS.includes(QP.get("vid")) ? QP.get("vid") : sc[0];
   return { b, style: stylesOf(b).includes(QP.get("style")) ? QP.get("style") : (QP.has("vid") ? "window" : sc[1]) };
 }
@@ -702,8 +708,9 @@ function gallery() {
 }
 function previewBar() {
   const pk = todaysPick(), msg = QP.has("msg") ? +QP.get("msg") : -1;
-  const go = o => { const q = new URLSearchParams({ preview: 1, vid: o.b, style: o.style, msg: o.msg }); location.href = location.pathname + "?" + q; };
-  const cur = { b: pk.b, style: pk.style, msg };
+  const go = o => { const q = new URLSearchParams({ preview: 1, vid: o.b, style: o.style, msg: o.msg }); if (o.line) q.set("line", o.line); location.href = location.pathname + "?" + q; };
+  const cur = { b: pk.b, style: pk.style, msg, line: QP.get("line") || "" };
+  const lineNow = cur.line || (msg < 0 ? "I love you Camila" : NOTES[msg % NOTES.length]);
   const step = (list, v, dir) => list[(list.indexOf(v) + dir + list.length) % list.length];
   const msgs = NOTES.length + 1, mstep = dir => ((msg + 1 + dir + msgs) % msgs) - 1;
   const bar = document.createElement("div");
@@ -719,13 +726,121 @@ function previewBar() {
   const row = (label, prev, next) => { btn("◀", prev); btn(label, next); btn("▶", next); };
   row("bouquet: " + cur.b, () => go({ ...cur, b: step(BOUQUETS, cur.b, -1) }), () => go({ ...cur, b: step(BOUQUETS, cur.b, 1) }));
   row("style: " + cur.style, () => go({ ...cur, style: step(stylesOf(cur.b), cur.style, -1) }), () => go({ ...cur, style: step(stylesOf(cur.b), cur.style, 1) }));
-  row("message " + (msg + 2) + "/" + msgs, () => go({ ...cur, msg: mstep(-1) }), () => go({ ...cur, msg: mstep(1) }));
+  row(cur.line ? "message: your own words" : "message " + (msg + 2) + "/" + msgs, () => go({ ...cur, line: "", msg: mstep(-1) }), () => go({ ...cur, line: "", msg: mstep(1) }));
+  // make your own: write the line yourself, save the combinations you like, star the one for today, send the list to Claude
+  let saved = []; try { saved = JSON.parse(localStorage.getItem("camilaSaved") || "[]"); } catch (e) {}
+  const keep = () => { try { localStorage.setItem("camilaSaved", JSON.stringify(saved)); } catch (e) {} };
+  // a text box on the page itself (pop-up prompts are blocked in some browsers, like the Claude app's pane)
+  const write = () => {
+    const pan = document.createElement("div");
+    pan.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.94);color:#ffc2e6;padding:calc(env(safe-area-inset-top, 0px) + 24px) 16px 24px;font:600 15px system-ui,-apple-system,sans-serif";
+    pan.innerHTML = "<div style='margin-bottom:10px'>Write the line for under the bouquet:</div>";
+    const ta = document.createElement("textarea"); ta.value = lineNow; ta.maxLength = 90;
+    ta.style.cssText = "width:100%;height:110px;background:#120412;color:#fff;border:1px solid #ff6fc8;border-radius:10px;padding:10px;font:16px system-ui;-webkit-user-select:text;user-select:text";
+    ta.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+    ta.addEventListener("keydown", e => e.stopPropagation());
+    pan.appendChild(ta);
+    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "margin:12px 8px 0 0;background:rgba(40,8,40,.9);color:#ffc2e6;border:1px solid #ff6fc8;border-radius:12px;padding:10px 16px;font:600 15px system-ui"; b.addEventListener("click", fn); pan.appendChild(b); };
+    mk("use this line", () => { const t = ta.value.trim(); if (t) go({ ...cur, line: t.slice(0, 90) }); });
+    mk("clear", () => { ta.value = ""; ta.focus(); });
+    mk("cancel", () => pan.remove());
+    document.body.appendChild(pan);
+    setTimeout(() => { ta.focus(); ta.select(); }, 50);
+  };
+  btn("✎", write); btn("write my own message", write);
+  btn("♥ save", () => { saved.push({ b: cur.b, style: cur.style, line: lineNow, today: false }); keep(); location.reload(); });
+  const panel = () => {
+    const pan = document.createElement("div");
+    pan.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.94);color:#ffc2e6;padding:calc(env(safe-area-inset-top, 0px) + 18px) 14px 24px;overflow:auto;font:600 14px system-ui,-apple-system,sans-serif";
+    const h = document.createElement("div"); h.style.cssText = "font-size:16px;margin-bottom:10px"; h.textContent = "Your saved ones ♥  (★ = put this one up today)"; pan.appendChild(h);
+    const mk = (parent, label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "margin:4px 6px 0 0;background:rgba(40,8,40,.9);color:#ffc2e6;border:1px solid #ff6fc8;border-radius:10px;padding:7px 11px;font:600 13px system-ui"; b.addEventListener("click", fn); parent.appendChild(b); return b; };
+    saved.forEach((it, i) => {
+      const r = document.createElement("div"); r.style.cssText = "border:1px solid #ff6fc855;border-radius:12px;padding:8px 10px;margin:8px 0;" + (it.today ? "background:#3a0c2e" : "");
+      const t = document.createElement("div"); t.textContent = (it.today ? "★ " : "") + (i + 1) + ". " + it.b + " · " + it.style + ' — "' + it.line + '"'; r.appendChild(t);
+      mk(r, "view", () => go({ b: it.b, style: it.style, msg: -1, line: it.line }));
+      mk(r, it.today ? "★ today" : "☆ today", () => { saved.forEach((x, k) => x.today = (k === i) ? !x.today : false); keep(); pan.remove(); panel(); });
+      mk(r, "✕", () => { saved.splice(i, 1); keep(); pan.remove(); panel(); });
+      pan.appendChild(r);
+    });
+    const code = saved.map(it => (it.today ? "TODAY: " : "") + it.b + " | " + it.style + " | " + it.line).join("\n");
+    const tip = document.createElement("div"); tip.style.cssText = "margin:14px 0 6px"; tip.textContent = saved.length ? "Copy this and send it to Claude:" : "Nothing saved yet: pick a bouquet, style and message, then tap ♥ save."; pan.appendChild(tip);
+    if (saved.length) {
+      const ta = document.createElement("textarea"); ta.value = code; ta.readOnly = true;
+      ta.style.cssText = "width:100%;height:120px;background:#120412;color:#fff;border:1px solid #ff6fc8;border-radius:10px;padding:8px;font:12px monospace"; pan.appendChild(ta);
+      const cp = mk(pan, "copy", () => { ta.select(); (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => { cp.textContent = "copied ♥"; }, () => { try { document.execCommand("copy"); } catch (e) {} cp.textContent = "copied ♥"; }); });
+    }
+    mk(pan, "close", () => pan.remove());
+    document.body.appendChild(pan);
+  };
+  bar.appendChild(document.createElement("span"));
+  btn("saved (" + saved.length + ")", panel);
+  bar.appendChild(document.createElement("span"));
   bar.appendChild(document.createElement("span"));
   btn("see all bouquets", () => { location.href = location.pathname + "?preview=1&gallery=1"; });
   document.body.appendChild(bar);
 }
-function startVideo(kind, style) {
+const POINTS = { bouquet: 211770, coral: 207935, crimson: 181514, ember: 230535, ivory: 153111, magenta: 142779, midnight: 140046, obsession: 275212,
+                 pastel: 96489, peach: 166912, rosepink: 234165, rust: 162578, sunflower: 228109, sunset: 88182, wildred: 157197, wine: 159370 };
+const MAKING = { bouquet: "picking every colour", crimson: "hanging amaranthus off raspberry hydrangeas", wildred: "raising red gladiolus and willow",
+                 magenta: "opening hot-pink nerines", obsession: "doming dark red roses", ivory: "gathering a cloud of white orchids",
+                 rosepink: "gathering pink orchids and lilies", ember: "wrapping coral roses in black paper", peach: "picking gold chrysanthemums",
+                 rust: "tying rust dahlias and amaranthus", sunflower: "wrapping sunflowers in black paper", wine: "gathering gothic wine flowers",
+                 dahlia: "rolling orange dahlias",
+                 sunset: "mixing orange and pink", pastel: "picking soft pastels", midnight: "growing midnight blue", coral: "wrapping coral peonies" };
+const HEADS = { bouquet: 50, crimson: 20, wildred: 23, magenta: 34, obsession: 47, ivory: 45, rosepink: 49, ember: 40, peach: 16,
+                rust: 19, sunflower: 33, wine: 20, sunset: 19, pastel: 17, midnight: 22, coral: 30 };
+// the PowerShell lines at the top, typed out like the renderer starting: prompt, two [ok] lines, then the little heart
+function videoLog(kind) {
+  logEl.hidden = false;
+  logEl.style.whiteSpace = "pre-wrap"; logEl.style.minHeight = "0";
+  const cmd = ".\\bouquet.ps1", L = ["compiling renderer ..... pixels / 24-bit", "today: " + (HEADS[kind] || 20) + " flowers ..... " + (POINTS[kind] || 150000).toLocaleString("en-US") + " points",
+      (MAKING[kind] || "arranging flowers") + " for Camila"];
+  const t0v = performance.now() / 1000;
+  const tick = () => {
+    const t = performance.now() / 1000 - t0v;
+    const n = Math.max(0, Math.min(cmd.length, Math.floor((t - 0.35) / 1.2 * cmd.length)));
+    let html = 'PS C:\\flowers&gt; <span class="c">' + cmd.slice(0, n) + "</span>" + (t < 1.9 ? '<span id="cur"></span>' : "");
+    for (let i = 0; i < L.length; i++) if (t >= 2.0 + i * 0.35) html += '\n<span class="k">[ok]</span> <span class="d">' + L[i] + "</span>";
+    if (t >= 2.9) html += '\n<span class="h">[♥]</span>';
+    logEl.innerHTML = html;
+    if (t < 3.2) requestAnimationFrame(tick);
+  };
+  tick();
+}
+// ---------- daily bouquets (his agent) + view counter ----------
+// a NEW bouquet every day, made by his agent: daily/days.json = {"YYYY-MM-DD": {"v": "vid/daily/<date>.mp4", "line": "..."}}, by HER local date
+function localDate() { const d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+async function loadDaily() {
+  if (QP.has("vid") || QP.has("style")) return null;
+  const key = QP.get("day") || localDate();
+  try {
+    const r = await fetch("daily/days.json", { cache: "no-cache" });
+    if (!r.ok) return null;
+    const e = (await r.json())[key];
+    return e && e.v ? e : null;
+  } catch (e) { return null; }
+}
+// how many times her page is opened: one ping per open of HER link, never from his preview, a still or a named bouquet
+const VIEWS = "https://abacus.jasoncameron.dev/", VNS = "fc85b44f5d77dd";
+function countView() {
+  if (PREVIEW || STILL || QP.has("vid") || QP.has("day")) return;
+  try {
+    fetch(VIEWS + "hit/" + VNS + "/opens").catch(() => {});
+    fetch(VIEWS + "hit/" + VNS + "/d" + localDate().replace(/-/g, "")).catch(() => {});
+  } catch (e) {}
+}
+async function showViews() {
+  const get = k => fetch(VIEWS + "get/" + VNS + "/" + k, { cache: "no-cache" }).then(r => r.ok ? r.json() : { value: 0 }).then(j => j.value || 0).catch(() => 0);
+  const [all, today] = await Promise.all([get("opens"), get("d" + localDate().replace(/-/g, ""))]);
+  const el = document.createElement("div");
+  el.textContent = "her page: opened " + all + (all === 1 ? " time" : " times") + ", " + today + " today";
+  el.style.cssText = "position:fixed;top:8px;right:8px;z-index:50;font:600 12px system-ui,sans-serif;color:#ffb6dc;background:rgba(0,0,0,.6);padding:4px 8px;border-radius:6px;pointer-events:none";
+  document.body.appendChild(el);
+}
+
+function startVideo(kind, style, daily) {
   const file = kind + "-" + (style === "trippy" ? "window" : style);
+  if (!PREVIEW) videoLog(kind);
   canvas.style.visibility = "hidden";
   statusEl.textContent = "♥  " + todaysNote() + "  ♥";
   pv = document.createElement("video");
@@ -733,8 +848,8 @@ function startVideo(kind, style) {
   pv.setAttribute("muted", ""); pv.setAttribute("playsinline", "");
   pv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;image-rendering:pixelated;pointer-events:none";
   let triedLive = false;
-  pv.addEventListener("error", () => { if (!triedLive) { triedLive = true; pv.src = "https://slavock.github.io/for-camila/vid/" + file + ".mp4"; pv.play().catch(() => {}); } });
-  pv.src = "vid/" + file + ".mp4";
+  pv.addEventListener("error", () => { if (!triedLive) { triedLive = true; pv.src = "https://slavock.github.io/for-camila/" + (daily ? daily.v : "vid/" + file + ".mp4"); pv.play().catch(() => {}); } });
+  pv.src = daily ? daily.v : "vid/" + file + ".mp4";
   canvas.parentNode.appendChild(pv);
   pv.play().catch(() => {});
   // ?look=trippy: the same bouquet, colours drifting through the rainbow, with a breathing echo of itself behind in opposite colours
@@ -758,13 +873,13 @@ function startVideo(kind, style) {
   pc.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated";
   canvas.parentNode.appendChild(pc);
   const mq = QP.get("msg");
-  const line = mq === null ? (dayIndex() === 0 ? "I love you Camila" : todaysNote()) : (+mq < 0 ? "I love you Camila" : NOTES[+mq % NOTES.length]);
+  const line = QP.get("line") || (daily && QP.get("msg") === null ? daily.line : null) || (mq === null ? (PICK_LINE || (dayIndex() === 0 ? "I love you Camila" : todaysNote())) : (+mq < 0 ? "I love you Camila" : NOTES[+mq % NOTES.length]));
   const drawLine = () => {
     const r = pc.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 3);
     pc.width = Math.round(r.width * d); pc.height = Math.round(r.height * d);
     const VW = pv.videoWidth || 610, VH = pv.videoHeight || 1330, s = Math.min(pc.width / VW, pc.height / VH);
     const dw = VW * s, dh = VH * s, ox = (pc.width - dw) / 2, oy = (pc.height - dh) / 2;
-    const cell = (style === "window" || style === "trippy" ? VW / 112 : VW / 244) * s;   // chunky letters for his window style, finer otherwise
+    const cell = VW / 236 * s;   // fine pixels for every style: the chunky 112-grid letters were unreadable on her phone
     const lw = Math.round(dw / cell), lh = Math.round(dh * 0.20 / cell);
     const low = document.createElement("canvas"); low.width = lw; low.height = lh;
     const g = low.getContext("2d");
@@ -1058,7 +1173,7 @@ async function start() {
     if (LOOK === 3) { logEl.hidden = true; statusEl.classList.add("foryou"); }
     // flower days in the pixel look play the PowerShell renderer's own recording (one full turn, looping); a finger turns it
     if (PREVIEW && QP.has("gallery")) { gallery(); return; }
-    if (LOOK === 3 && !STILL) { await loadSchedule(); const pk = todaysPick(); startVideo(pk.b, pk.style); if (PREVIEW) previewBar(); return; }
+    if (LOOK === 3 && !STILL) { await loadSchedule(); const dd = await loadDaily(); const pk = todaysPick(); if (dd) startVideo("daily", "window", dd); else startVideo(pk.b, pk.style); countView(); if (PREVIEW) { previewBar(); showViews(); } return; }
     if (PREVIEW && !STILL) previewBar();   // his design: the same bouquet every day, a new message under it
     const flower = FLOWERS.includes(kind);
     const buf = flower ? await loadPoints(kind) : buildShape(kind);

@@ -6,7 +6,7 @@ const BASE = "https://slavock.github.io/for-camila/";
 const KINDS = ["bouquet"];
 const NOTES = [
   "I hope today is as beautiful as you are",
-  "You walk in beauty, like the night of starry skies",
+  "I hope your day is beautiful",
   "I hope you smiled today",
   "The stars came out tonight just to look at you",
   "Thinking about you, like always",
@@ -36,6 +36,7 @@ const NOTES = [
   "Every day with you is a good day",
   "I hope the sun is kind to you today",
   "You make me want to be better",
+  "You walk in beauty, like the night of starry skies",
   "Sending you a hug from here",
   "I hope someone makes you laugh today",
   "You're beautiful, inside and out",
