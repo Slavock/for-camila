@@ -603,15 +603,20 @@ const VID_SPIN = 0.55;                 // radians per second in the recording (b
 let pv = null;
 // his window's style on most days; cubes, code and fine on others; the florist bouquets from his TikTok in between
 const BOUQUETS = ["bouquet", "crimson", "wildred", "magenta", "obsession", "ivory", "rosepink", "ember", "peach",
-                  "rust", "sunflower", "wine", "dahlia", "sunset", "pastel", "midnight", "coral"],
-      STYLES = ["window", "cubes", "code", "fine", "trippy"];
+                  "rust", "sunflower", "wine", "dahlia", "sunset", "pastel", "midnight", "coral",
+                  "violet", "emerald", "scarlet", "blossom"],
+      STYLES = ["window", "hd", "cubes", "code", "fine", "trippy"];
 const OPEN4 = ["bouquet", "crimson", "wildred", "magenta"];
-const stylesOf = b => OPEN4.includes(b) ? STYLES : ["window", "cubes", "code", "trippy"];   // which recordings exist
+// made FROM his TikTok photos (ref_tiktok\photo3d.py): window + fine (124 columns) so far; their old cubes/code were the builder look
+const PHOTO = ["wildred", "ivory", "rosepink", "crimson", "ember", "peach", "magenta", "dahlia", "sunflower", "rust", "wine",
+               "sunset", "pastel", "midnight", "coral", "violet", "emerald", "scarlet", "blossom"];
+// which recordings exist; "hd" = his window look with more pixels (96 columns), so far only for his own bouquet
+const stylesOf = b => b === "bouquet" ? STYLES : PHOTO.includes(b) ? ["window", "fine", "trippy"] : ["window", "cubes", "code", "trippy"];
 let SCHEDULE = [["bouquet", "window"], ["crimson", "window"], ["sunflower", "window"], ["bouquet", "cubes"], ["obsession", "window"],
-                  ["wildred", "window"], ["coral", "window"], ["magenta", "code"], ["midnight", "window"], ["rust", "window"],
-                  ["pastel", "cubes"], ["ivory", "window"], ["wine", "window"], ["sunset", "window"], ["crimson", "cubes"],
-                  ["rosepink", "window"], ["ember", "window"], ["magenta", "window"], ["peach", "window"], ["midnight", "code"],
-                  ["bouquet", "fine"], ["sunflower", "cubes"], ["wildred", "code"], ["coral", "cubes"]];
+                  ["wildred", "window"], ["coral", "window"], ["magenta", "fine"], ["midnight", "window"], ["rust", "window"],
+                  ["pastel", "fine"], ["ivory", "window"], ["wine", "window"], ["sunset", "window"], ["crimson", "fine"],
+                  ["rosepink", "window"], ["ember", "window"], ["magenta", "window"], ["peach", "window"], ["violet", "window"],
+                  ["bouquet", "fine"], ["emerald", "window"], ["scarlet", "window"], ["blossom", "window"]];
 // his own picks (hearted in the gallery) arrive as schedule.json next to the page: {"from": <day index>, "days": ["rust-window", ...]}
 let SCHED_FROM = 0, TODAY_PICK = null, PICK_LINE = null;
 async function loadSchedule() {
@@ -779,21 +784,27 @@ function previewBar() {
   btn("see all bouquets", () => { location.href = location.pathname + "?preview=1&gallery=1"; });
   document.body.appendChild(bar);
 }
-const POINTS = { bouquet: 211770, coral: 207935, crimson: 181514, ember: 230535, ivory: 153111, magenta: 142779, midnight: 140046, obsession: 275212,
-                 pastel: 96489, peach: 166912, rosepink: 234165, rust: 162578, sunflower: 228109, sunset: 88182, wildred: 157197, wine: 159370 };
-const MAKING = { bouquet: "picking every colour", crimson: "hanging amaranthus off raspberry hydrangeas", wildred: "raising red gladiolus and willow",
-                 magenta: "opening hot-pink nerines", obsession: "doming dark red roses", ivory: "gathering a cloud of white orchids",
-                 rosepink: "gathering pink orchids and lilies", ember: "wrapping coral roses in black paper", peach: "picking gold chrysanthemums",
-                 rust: "tying rust dahlias and amaranthus", sunflower: "wrapping sunflowers in black paper", wine: "gathering gothic wine flowers",
-                 dahlia: "rolling orange dahlias",
-                 sunset: "mixing orange and pink", pastel: "picking soft pastels", midnight: "growing midnight blue", coral: "wrapping coral peonies" };
-const HEADS = { bouquet: 50, crimson: 20, wildred: 23, magenta: 34, obsession: 47, ivory: 45, rosepink: 49, ember: 40, peach: 16,
-                rust: 19, sunflower: 33, wine: 20, sunset: 19, pastel: 17, midnight: 22, coral: 30 };
+// photo-made bouquets: POINTS = the cloud's point count (photo3d.py), HEADS = flowers counted in the photo
+const POINTS = { bouquet: 211770, obsession: 275212,
+                 wildred: 57032, ivory: 80876, rosepink: 76196, crimson: 93962, ember: 71436, peach: 54748, magenta: 150756, dahlia: 91796,
+                 sunflower: 91718, rust: 82662, wine: 74690, sunset: 69852, pastel: 105878, midnight: 73890, coral: 132370,
+                 violet: 73240, emerald: 89496, scarlet: 127582, blossom: 76190 };
+const MAKING = { bouquet: "picking every colour", obsession: "doming dark red roses",
+                 wildred: "raising red gladiolus and plum hydrangea", ivory: "gathering white orchids and pale dahlias",
+                 rosepink: "gathering pink orchids and lilies", crimson: "hanging amaranthus off raspberry hydrangeas",
+                 ember: "wrapping coral garden roses in black paper", peach: "picking gold chrysanthemums",
+                 magenta: "opening hot-pink nerines", dahlia: "rolling orange pompon dahlias",
+                 sunflower: "wrapping sunflowers in black paper", rust: "tying rust dahlias and amaranthus", wine: "gathering gothic wine flowers",
+                 sunset: "mixing gerberas, pink roses and amaranthus", pastel: "opening pink tulips and green anthurium",
+                 midnight: "finding blue delphinium in the dark", coral: "opening coral garden roses", violet: "opening violet orchids",
+                 emerald: "pairing dark scabiosa with green anthurium", scarlet: "polishing red anthuriums", blossom: "gathering pink roses and white orchids" };
+const HEADS = { bouquet: 50, obsession: 47, wildred: 12, ivory: 45, rosepink: 45, crimson: 14, ember: 30, peach: 18, magenta: 26, dahlia: 32,
+                sunflower: 9, rust: 30, wine: 16, sunset: 28, pastel: 22, midnight: 20, coral: 24, violet: 18, emerald: 17, scarlet: 22, blossom: 35 };
 // the PowerShell lines at the top, typed out like the renderer starting: prompt, two [ok] lines, then the little heart
 function videoLog(kind) {
   logEl.hidden = false;
-  logEl.style.whiteSpace = "pre-wrap"; logEl.style.minHeight = "0";
-  const cmd = ".\\bouquet.ps1", L = ["compiling renderer ..... pixels / 24-bit", "today: " + (HEADS[kind] || 20) + " flowers ..... " + (POINTS[kind] || 150000).toLocaleString("en-US") + " points",
+  logEl.style.whiteSpace = "pre-wrap"; logEl.style.minHeight = "calc(6 * 1.55em)";   // room for the render line and [♥], so the bouquet never jumps
+  const cmd = ".\\bouquet.ps1", L = ["compiling renderer ..... HD","today: " + (HEADS[kind] || 20) + " flowers ..... " + (POINTS[kind] || 150000).toLocaleString("en-US") + " points",
       (MAKING[kind] || "arranging flowers") + " for Camila"];
   const t0v = performance.now() / 1000;
   const tick = () => {
@@ -801,8 +812,7 @@ function videoLog(kind) {
     const n = Math.max(0, Math.min(cmd.length, Math.floor((t - 0.35) / 1.2 * cmd.length)));
     let html = 'PS C:\\flowers&gt; <span class="c">' + cmd.slice(0, n) + "</span>" + (t < 1.9 ? '<span id="cur"></span>' : "");
     for (let i = 0; i < L.length; i++) if (t >= 2.0 + i * 0.35) html += '\n<span class="k">[ok]</span> <span class="d">' + L[i] + "</span>";
-    if (t >= 2.9) html += '\n<span class="h">[♥]</span>';
-    logEl.innerHTML = html;
+    logEl.innerHTML = html;   // the render progress line and the [♥] come after, from startVideo's render sequence
     if (t < 3.2) requestAnimationFrame(tick);
   };
   tick();
@@ -847,6 +857,10 @@ function startVideo(kind, style, daily) {
   pv.muted = true; pv.loop = true; pv.autoplay = true; pv.playsInline = true; pv.preload = "auto";
   pv.setAttribute("muted", ""); pv.setAttribute("playsinline", "");
   pv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;image-rendering:pixelated;pointer-events:none";
+  // bigger on her phone (he said it looked small): fill the width, then a little zoom on the flowers (only empty stars get cropped)
+  const ZOOM = 1.04;
+  canvas.parentNode.style.overflow = "hidden";   // the zoomed video must never cover the PowerShell lines above it
+  pv.style.objectFit = "cover"; pv.style.transformOrigin = "50% 42%"; pv.style.transform = "scale(" + ZOOM + ")";
   let triedLive = false;
   pv.addEventListener("error", () => { if (!triedLive) { triedLive = true; pv.src = "https://slavock.github.io/for-camila/" + (daily ? daily.v : "vid/" + file + ".mp4"); pv.play().catch(() => {}); } });
   pv.src = daily ? daily.v : "vid/" + file + ".mp4";
@@ -872,6 +886,79 @@ function startVideo(kind, style, daily) {
   const pc = document.createElement("canvas");
   pc.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated";
   canvas.parentNode.appendChild(pc);
+  // her page: the PowerShell lines type out, then the bouquet is BUILT OUT OF CODE: every pixel spawns as a flickering code
+  // character in its own colour and locks into the real pixel while the terminal counts it up; then the living bouquet takes
+  // over, her line writes itself left to right, then the little heart (his asks, 11-19)
+  if (!PREVIEW) {
+    const tStart = performance.now(), stage = canvas.parentNode, vids = [...stage.querySelectorAll("video")];
+    const clip = (el, v) => { el.style.clipPath = v; el.style.webkitClipPath = v; };
+    vids.forEach(el => { el.style.visibility = "hidden"; });          // it keeps playing (iPhones only decode playing video), just unseen
+    clip(pc, "inset(0 100% 0 0)");
+    const ov = document.createElement("canvas");
+    ov.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;transform-origin:50% 42%;transform:scale(" + ZOOM + ")";
+    stage.appendChild(ov);
+    const GLYPHS = "01{}[]<>/*+=;:#&%$ILOVECAMILAilovecamila";
+    const bar = p => { const n = 16, k = Math.round(p * n); return "█".repeat(k) + "░".repeat(n - k); };
+    let base = "", built = false;
+    const reveal = () => {
+      if (built) return; built = true;
+      vids.forEach(el => { el.style.visibility = ""; el.play().catch(() => {}); });
+      ov.style.transition = "opacity .7s ease"; ov.style.opacity = "0"; setTimeout(() => ov.remove(), 800);
+      const t1 = performance.now();
+      const write = now => {
+        const q = Math.min(1, (now - t1) / 1500);
+        clip(pc, "inset(0 " + ((1 - q) * 100).toFixed(1) + "% 0 0)");
+        if (q < 1) requestAnimationFrame(write); else { clip(pc, ""); logEl.innerHTML += '\n<span class="h">[♥]</span>'; }
+      };
+      requestAnimationFrame(write);
+    };
+    const build = () => {
+      base = logEl.innerHTML;
+      const VW = pv.videoWidth, VH = pv.videoHeight;
+      if (!VW) { reveal(); return; }
+      const cellPx = style === "hd" ? 7 : style === "fine" ? 5 : 9;    // the renderer's own pixel size in each recording
+      const GW = Math.round(VW / cellPx), GH = Math.round(VH / cellPx);
+      const src = document.createElement("canvas"); src.width = GW; src.height = GH;
+      const sg = src.getContext("2d"); sg.imageSmoothingEnabled = false;
+      let data;
+      try { vids.forEach(el => el.pause()); sg.drawImage(pv, 0, 0, GW, GH); data = sg.getImageData(0, 0, GW, GH).data; } catch (e) { reveal(); return; }
+      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const W = ov.width = Math.round(stage.clientWidth * dpr), H = ov.height = Math.round(stage.clientHeight * dpr);
+      const s = Math.max(W / VW, H / VH), dw = VW * s, dh = VH * s, ox = (W - dw) / 2, oy = (H - dh) / 2, cw = dw / GW, ch = dh / GH;
+      const cells = [];
+      for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+        const i = 4 * (y * GW + x), r = data[i], g = data[i + 1], b = data[i + 2];
+        if (Math.max(r, g, b) < 34) continue;                          // the black sky stays black
+        cells.push({ x: ox + x * cw, y: oy + y * ch, c: "rgb(" + r + "," + g + "," + b + ")", t: 0.1 + 2.4 * (0.55 * Math.random() + 0.45 * (1 - y / GH)) });
+      }
+      cells.sort((a, b) => a.t - b.t);
+      const locked = document.createElement("canvas"); locked.width = W; locked.height = H;
+      const lg = locked.getContext("2d"), og = ov.getContext("2d");
+      og.textAlign = "center"; og.textBaseline = "middle";
+      og.font = "700 " + Math.max(6, Math.round(ch * 1.2)) + "px 'JetBrains Mono', ui-monospace, monospace";
+      og.shadowBlur = Math.round(ch * 0.8);
+      const SCR = 0.5, tb = performance.now();
+      let next = 0;
+      const step = now => {
+        const t = (now - tb) / 1000;
+        while (next < cells.length && cells[next].t + SCR <= t) { const c = cells[next++]; lg.fillStyle = c.c; lg.fillRect(c.x, c.y, Math.ceil(cw), Math.ceil(ch)); }
+        og.clearRect(0, 0, W, H); og.shadowColor = "transparent"; og.drawImage(locked, 0, 0);
+        for (let k = next; k < cells.length && cells[k].t <= t; k++) {
+          const c = cells[k]; og.fillStyle = c.c; og.shadowColor = c.c;
+          og.fillText(GLYPHS[(Math.random() * GLYPHS.length) | 0], c.x + cw / 2, c.y + ch / 2);
+        }
+        const p = cells.length ? next / cells.length : 1;
+        logEl.innerHTML = base + '\n<span class="k">[..]</span> <span class="d">compiling bouquet ' + bar(p) + " " + Math.round(p * 100) + "%</span>";
+        if (next < cells.length) { requestAnimationFrame(step); return; }
+        logEl.innerHTML = base + '\n<span class="k">[ok]</span> <span class="d">compiled ' + cells.length.toLocaleString("en-US") + " pixels ..... 100%</span>";
+        reveal();
+      };
+      requestAnimationFrame(step);
+    };
+    const go = () => setTimeout(build, Math.max(0, 3500 - (performance.now() - tStart)));
+    if (pv.readyState >= 2) go(); else pv.addEventListener("loadeddata", go, { once: true });
+    setTimeout(() => { if (!base) reveal(); }, 9000);                  // never leave her on a black screen
+  }
   const mq = QP.get("msg");
   const line = QP.get("line") || (daily && QP.get("msg") === null ? daily.line : null) || (mq === null ? (PICK_LINE || (dayIndex() === 0 ? "I love you Camila" : todaysNote())) : (+mq < 0 ? "I love you Camila" : NOTES[+mq % NOTES.length]));
   const drawLine = () => {
