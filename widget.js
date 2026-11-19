@@ -3,7 +3,7 @@
 // Then on the home screen: long-press > + > Scriptable > Large (or Small) > Add, tap it to edit, Script = "For Camila".
 
 const BASE = "https://slavock.github.io/for-camila/";
-const KINDS = ["bouquet", "teddy", "heart", "bunny", "cupcake", "kitty"];
+const KINDS = ["bouquet", "crimson", "obsession", "moonlight", "lavender", "sakura", "blush", "teddy", "heart", "bunny", "cupcake", "kitty"];
 const NOTES = [
   "Every day with you is my favorite day.", "You make my heart smile.", "I'd pick you in every lifetime.",
   "You're my safe place.", "Thinking about you, like always.", "Your laugh is my favorite sound.",
