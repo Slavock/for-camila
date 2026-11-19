@@ -56,6 +56,7 @@ body {
 @keyframes blink { 50% { opacity: 0; } }
 #stage { position: relative; flex: 1 1 auto; min-height: 0; }
 canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+#status.foryou { text-align: center; color: #ff8cc0; letter-spacing: 0.02em; font-size: clamp(11px, 3.3vw, 14px); white-space: normal; text-wrap: balance; padding-top: 10px; background: #000; }
 #status {
   flex: 0 0 auto; color: var(--dim); font-size: clamp(9px, 2.6vw, 12px);
   padding: 4px max(12px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 8px) max(12px, env(safe-area-inset-left, 0px));
@@ -90,7 +91,7 @@ const errEl = document.getElementById("err");
 function fail(msg) { errEl.textContent = msg; errEl.hidden = false; }
 
 // ---------- data ----------
-const METAS = {"blush": {"count": 115734, "heads": 32, "minY": -0.7242, "maxY": 0.9387, "maxR": 0.9068, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "crimson": {"count": 181514, "heads": 20, "minY": -0.7242, "maxY": 1.0655, "maxR": 0.8481, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "lavender": {"count": 75006, "heads": 44, "minY": -0.7246, "maxY": 0.9821, "maxR": 0.5733, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "moonlight": {"count": 110278, "heads": 21, "minY": -0.7246, "maxY": 0.6464, "maxR": 0.9068, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "obsession": {"count": 284424, "heads": 49, "minY": -0.7247, "maxY": 0.632, "maxR": 0.697, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "sakura": {"count": 70092, "heads": 233, "minY": -0.95, "maxY": 0.8269, "maxR": 0.879, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}};
+const METAS = {"crimson": {"count": 181514, "heads": 20, "minY": -0.7242, "maxY": 1.0655, "maxR": 0.8481, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "ember": {"count": 227900, "heads": 40, "minY": -0.7247, "maxY": 0.5429, "maxR": 0.7, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "ivory": {"count": 151859, "heads": 45, "minY": -0.7246, "maxY": 0.5892, "maxR": 0.74, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "magenta": {"count": 142779, "heads": 34, "minY": -0.7247, "maxY": 0.9886, "maxR": 0.7069, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "obsession": {"count": 284424, "heads": 49, "minY": -0.7247, "maxY": 0.632, "maxR": 0.697, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "peach": {"count": 158161, "heads": 16, "minY": -0.7242, "maxY": 0.829, "maxR": 0.66, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "rosepink": {"count": 234356, "heads": 49, "minY": -0.7246, "maxY": 0.648, "maxR": 0.72, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}, "wildred": {"count": 157197, "heads": 23, "minY": -0.7247, "maxY": 1.0887, "maxR": 0.7046, "materials": {"petal": 0, "leaf": 1, "satin": 2, "glow": 3, "twinkle": 4}}};
 async function gunzip(blob) {
   const head = new Uint8Array(await blob.slice(0, 2).arrayBuffer());
   if (head[0] !== 0x1f || head[1] !== 0x8b) return await blob.arrayBuffer();   // already unpacked by the server
@@ -257,13 +258,22 @@ uniform sampler2D uScene, uBloom, uText;
 uniform vec2 uRes; uniform float uT, uWrite, uDpr, uStyle, uLook; uniform vec3 uInkA, uInkB, uBg, uBgC, uStar, uGrade;
 float h21(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 void main() {
-  vec2 px = uv * uRes;
-  vec4 sc = texture(uScene, uv);
+  // the pixel look (default): the whole picture snapped to chunky pixels, about 112 across, like the PowerShell bouquet
+  vec2 U = uv; float PX = 0.0;
+  if (uLook > 2.5) { PX = max(uRes.x / 84.0, 2.0 * uDpr); U = (floor(uv * uRes / PX) + 0.5) * PX / uRes; }
+  vec2 px = U * uRes;
+  vec4 sc = texture(uScene, U);
+  if (uLook > 2.5) {   // each pixel takes the even average of its whole area: calm colour, no speckle
+    sc = vec4(0.0);
+    for (int i = -2; i <= 2; i++) for (int j = -2; j <= 2; j++) sc += texture(uScene, U + vec2(float(i), float(j)) * PX * 0.2 / uRes);
+    sc /= 25.0;
+  }
   vec3 c = sc.rgb; float geo = sc.a;
-  vec4 tx = texture(uText, vec2(uv.x, 1.0 - uv.y));
+  vec2 UT = uLook > 2.5 ? (floor(uv * uRes / (PX * 0.5)) + 0.5) * (PX * 0.5) / uRes : U;
+  vec4 tx = texture(uText, vec2(UT.x, 1.0 - UT.y));
   // the words keep scrolling upward, snapped to whole pixels so the text stays sharp
   float scroll = floor(uT * 7.0 * uDpr) / uRes.y;
-  float words = texture(uText, vec2(uv.x, fract(1.0 - uv.y + scroll))).r;
+  float words = texture(uText, vec2(U.x, fract(1.0 - U.y + scroll))).r;
   float cur = tx.g, curGlow = tx.b;
   // the bouquet: a glowing underlay, with the love words lit in each flower's own colour
   float mx = max(c.r, max(c.g, c.b));
@@ -289,11 +299,16 @@ void main() {
   float kw = (0.42 + 0.66 * mx) / max(mx, 0.001);
   vec3 lit = geo * step(0.03, mx) * min(c * kw, vec3(1.0)) * wave;
   vec3 col = mix(fill, lit, uLook > 1.5 ? 0.0 : pat);
+  // uLook 3 = "pixel": the real shaded flower, one solid colour per chunky pixel
+  if (uLook > 2.5) {
+    float kp = (0.06 + 1.00 * mx) / max(mx, 0.001);   // deep, moody shadows like the terminal
+    col = geo * step(0.02, mx) * min(c * kp, vec3(1.0)) * (0.92 + 0.08 * wave);
+  }
   // crisp contour lines where petals and flowers meet, so the bouquet's real shapes read clearly (no glow, one pixel wide)
   if (uLook < 1.5) {
     vec2 ts = 1.0 / vec2(textureSize(uScene, 0));
-    vec4 a = texture(uScene, uv + vec2(ts.x, 0.0)), b = texture(uScene, uv - vec2(ts.x, 0.0));
-    vec4 e = texture(uScene, uv + vec2(0.0, ts.y)), f = texture(uScene, uv - vec2(0.0, ts.y));
+    vec4 a = texture(uScene, U + vec2(ts.x, 0.0)), b = texture(uScene, U - vec2(ts.x, 0.0));
+    vec4 e = texture(uScene, U + vec2(0.0, ts.y)), f = texture(uScene, U - vec2(0.0, ts.y));
     vec3 W3 = vec3(0.30, 0.55, 0.15);
     float gx = dot(a.rgb - b.rgb, W3) + 0.25 * (a.a - b.a), gy = dot(e.rgb - f.rgb, W3) + 0.25 * (e.a - f.a);
     float edge = smoothstep(0.05, 0.16, length(vec2(gx, gy)));
@@ -318,23 +333,23 @@ void main() {
   float reveal = smoothstep(uWrite * uRes.x - 12.0 * uDpr, uWrite * uRes.x, px.x);
   float on = 1.0 - reveal;
   vec3 ink = mix(uInkA, uInkB, 0.5 + 0.5 * sin(px.x * 0.012 - uT * 1.2));
-  col += on * cur * (0.30 + 0.95 * patC) * ink * 1.15;
+  col += on * cur * (uLook > 2.5 ? 0.95 : (0.30 + 0.95 * patC)) * ink * 1.15;
   // scanlines and a slow light band
-  float line = mod(floor(px.y / (1.5 * uDpr)), 2.0) < 1.0 ? 1.0 : 0.94;
+  float line = (uLook > 2.5 || mod(floor(px.y / (1.5 * uDpr)), 2.0) < 1.0) ? 1.0 : 0.94;   // the pixel look keeps it calm: no scanlines
   float band = exp(-pow((px.y / uRes.y - fract(uT * 0.11) * 1.3 + 0.15) * 14.0, 2.0));
-  col *= line * (1.0 + 0.15 * band);
+  col *= line * (1.0 + (uLook > 2.5 ? 0.0 : 0.15) * band);
   col = col / (1.0 + 0.12 * col) * 1.12;
   // today's colour mood: a gentle grade on the words and a deep tinted backdrop, a touch lighter toward the middle
   col *= uGrade;
-  vec2 q = (uv - vec2(0.5, 0.52)) * vec2(uRes.x / uRes.y, 1.0);
-  vec3 bg = mix(uBgC, uBg, smoothstep(0.0, 0.85, length(q)));
+  vec2 q = (U - vec2(0.5, 0.52)) * vec2(uRes.x / uRes.y, 1.0);
+  vec3 bg = mix(uBgC, uBg, smoothstep(0.0, 0.85, length(q))) * (uLook > 2.5 ? 0.45 : 1.0);
   o = vec4(col + bg, 1.0);
 }`;
 
 // ---------- the page ----------
 let W = 0, H = 0, SW = 0, SH = 0, sf = 1, dpr = 1, scaleK = 1, centerY = 0, sceneTex, sceneFbo, textTex;
 let SC, BL, CO, SP, vao, spVao, spCount = 0, count = 0;
-let ang = 0, vel = 0.30, dragging = false, lastX = 0, downX = 0, downT = 0, t0 = performance.now() / 1000;
+let ang = 0, vel = 0.45, dragging = false, lastX = 0, downX = 0, downT = 0, t0 = performance.now() / 1000;
 
 function buildSparkles(buf) {
   // pick points on the flowers (not stems or leaves) and send sparkles outward and upward from them
@@ -363,6 +378,8 @@ function buildSparkles(buf) {
   gl.bindVertexArray(null);
 }
 
+// the pixel look writes the line in bold rounded letters (a script turns to blobs at that pixel size)
+function lineFont(size) { return LOOK === 3 ? "800 " + size + "px 'Arial Rounded MT Bold', 'Helvetica Neue', Arial, sans-serif" : CUR.weight + " " + size + "px " + CUR.font + ", 'Segoe Script', cursive"; }
 function wordsAndScript(w, h) {
   // R: rows of "I love you" in every language; G: the cursive line; B: its soft glow
   const cv = document.createElement("canvas"); cv.width = w; cv.height = h;
@@ -387,22 +404,28 @@ function wordsAndScript(w, h) {
   // cursive layer
   g.fillStyle = "#000"; g.fillRect(0, 0, w, h);
   const line = CUR.line;
-  let size = Math.round(h * 0.16);
-  g.font = CUR.weight + " " + size + "px " + CUR.font + ", 'Segoe Script', cursive";
-  const tw = g.measureText(line).width;
-  if (tw > w * 0.9) { size = Math.floor(size * w * 0.9 / tw); g.font = CUR.weight + " " + size + "px " + CUR.font + ", 'Segoe Script', cursive"; }
+  // the pixel look splits the line in two so each half can be big and readable
+  const parts = false && line.split(" ").length >= 3
+    ? (() => { const ws = line.split(" "), k = Math.ceil(ws.length * 0.6); return [ws.slice(0, k).join(" "), ws.slice(k).join(" ")]; })()
+    : [line];
+  let size = Math.round(h * (parts.length > 1 ? 0.085 : 0.16));
+  g.font = lineFont(size);
+  const tw = Math.max(...parts.map(t => g.measureText(t).width));
+  if (tw > w * 0.9) { size = Math.floor(size * w * 0.9 / tw); g.font = lineFont(size); }
   g.textAlign = "center"; g.textBaseline = "alphabetic"; g.fillStyle = "#fff";
+  const gapL = Math.round(size * 1.05);
   const by = h - Math.round(size * 0.42);
-  g.fillText(line, w / 2, by);
+  const drawLine = () => parts.forEach((t, i) => g.fillText(t, w / 2, by - (parts.length - 1 - i) * gapL));
+  drawLine();
   const curs = g.getImageData(0, 0, w, h).data;
   g.filter = "blur(" + Math.round(size * 0.14) + "px)";
-  g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.fillStyle = "#fff"; g.fillText(line, w / 2, by);
+  g.fillStyle = "#000"; g.fillRect(0, 0, w, h); g.fillStyle = "#fff"; drawLine();
   g.filter = "none";
   const glow = g.getImageData(0, 0, w, h).data;
   for (let i = 0; i < w * h; i++) {
     out.data[4 * i] = words[4 * i]; out.data[4 * i + 1] = curs[4 * i]; out.data[4 * i + 2] = glow[4 * i]; out.data[4 * i + 3] = 255;
   }
-  return { img: out, textTop: by - size * 1.05 };
+  return { img: out, textTop: by - size * 1.05 - (parts.length - 1) * gapL };
 }
 
 function resize() {
@@ -447,7 +470,7 @@ function frame(nowMs) {
   const dt = lastNow ? Math.min(0.1, now - lastNow) : 0.016; lastNow = now;
   const html = typeLog(t);
   if (html !== lastLog) { logEl.innerHTML = html; lastLog = html; }
-  if (!dragging) { ang += vel * dt; vel += (0.30 - vel) * Math.min(1, dt * 0.8); }
+  if (!dragging) { ang += vel * dt; vel += (0.45 - vel) * Math.min(1, dt * 0.8); }
   const grow = (tb - 0.2) / 3.2;
   // a soft, swaying turn and a gentle breathing tilt
   const viewAng = ang + 0.22 * Math.sin(Math.max(0, tb) * 0.37);
@@ -483,23 +506,56 @@ function frame(nowMs) {
   }
 
   const st = (tb > 0 ? "\u25CF live" : "\u25CB ready") + "    " + META.label + "    " + META.count.toLocaleString("en-US") + " points    " + CUR.status;
-  if (st !== lastStatus) { statusEl.textContent = st; lastStatus = st; }
+  const st2 = LOOK === 3 ? "♥ for you ♥" : st;
+  if (st2 !== lastStatus) { statusEl.textContent = st2; lastStatus = st2; }
   drawFx(dt, tb);
   requestAnimationFrame(frame);
 }
 
 // ---------- little touches: heart bursts where she taps, shooting stars, a love note each day ----------
 const NOTES = [
-  "Every day with you is my favorite day.", "You make my heart smile.", "I'd pick you in every lifetime.",
-  "You're my safe place.", "Thinking about you, like always.", "Your laugh is my favorite sound.",
-  "You and me are my favorite story.", "I'm so lucky it's you.", "You look beautiful today. You always do.",
-  "I can't wait to see you.", "You're my sunshine on cloudy days.", "Holding your hand is my favorite thing.",
-  "You make ordinary days feel special.", "I love you more than yesterday.", "You're cuter than any cupcake.",
-  "My heart is all yours.", "I hope today is as sweet as you.", "You're my favorite notification.",
-  "Every flower here is for you.", "You're my person.", "Sending you a million hugs.",
-  "You make everything better.", "I'm proud of you, always.", "You and me, forever.",
-  "Smile, someone loves you a lot. Me.", "You're the best part of my day.", "Home is wherever you are.",
-  "You deserve all the flowers.", "Thank you for being you.", "I love you, Camila."
+  "I hope today is as beautiful as you are",
+  "You walk in beauty, like the night of starry skies",
+  "I hope you smiled today",
+  "The stars came out tonight just to look at you",
+  "Thinking about you, like always",
+  "Shall I compare you to a summer's day? You are more lovely",
+  "I hope your day is gentle with you",
+  "Some beauty is loud. Yours is quiet, and it stays",
+  "You make everything better, just by being you",
+  "You're the kind of beautiful that makes the world slow down",
+  "I'm so proud of you",
+  "Light finds you first, then everything else",
+  "I hope you know how loved you are",
+  "Even the moon looks a little shy next to you",
+  "Can't wait to see you",
+  "You're beautiful in a way words keep trying to catch",
+  "You deserve the softest, happiest day",
+  "The universe made a lot of stars, then it made you",
+  "I'm lucky it's you",
+  "Your smile is my favorite view",
+  "I hope today brings you something sweet",
+  "Every sunset tries, but you're still the prettiest thing I've seen",
+  "Missing you a little more than yesterday",
+  "You glow without even trying",
+  "Whatever today brings, I'm on your side",
+  "You're my favorite person",
+  "I hope you feel as special as you are",
+  "Don't forget to take care of yourself today",
+  "Every day with you is a good day",
+  "I hope the sun is kind to you today",
+  "You make me want to be better",
+  "Sending you a hug from here",
+  "I hope someone makes you laugh today",
+  "You're beautiful, inside and out",
+  "I'm always here for you",
+  "I hope you rest well tonight",
+  "Still falling for you",
+  "You're the best part of my day",
+  "I hope today feels light",
+  "Good things are coming your way",
+  "Thank you for being you",
+  "I love you, Camila"
 ];
 function dayIndex() { const d = new Date(); return Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2026, 10, 18)) / 86400000); }
 function todaysNote() { const i = dayIndex(); return NOTES[((i % NOTES.length) + NOTES.length) % NOTES.length]; }
@@ -540,12 +596,220 @@ function drawFx(dt, tb) {
   }
 }
 
+// ---------- the pixel-look flower days: the terminal renderer's recording, one full turn per loop ----------
+const VIDS = ["bouquet", "crimson", "obsession", "ivory", "wildred", "rosepink", "ember", "magenta", "peach"];
+const VID_SPIN = 0.55;                 // radians per second in the recording (bouquet.ps1 -PixelSpin)
+let pv = null;
+// his window's style on most days; cubes, code and fine on others; the florist bouquets from his TikTok in between
+const BOUQUETS = ["bouquet", "crimson", "wildred", "magenta", "obsession", "ivory", "rosepink", "ember", "peach",
+                  "rust", "sunflower", "wine", "sunset", "pastel", "midnight", "coral"],
+      STYLES = ["window", "cubes", "code", "fine", "trippy"];
+const OPEN4 = ["bouquet", "crimson", "wildred", "magenta"];
+const stylesOf = b => OPEN4.includes(b) ? STYLES : ["window", "cubes", "code", "trippy"];   // which recordings exist
+let SCHEDULE = [["bouquet", "window"], ["crimson", "window"], ["sunflower", "window"], ["bouquet", "cubes"], ["obsession", "window"],
+                  ["wildred", "window"], ["coral", "window"], ["magenta", "code"], ["midnight", "window"], ["rust", "window"],
+                  ["pastel", "cubes"], ["ivory", "window"], ["wine", "window"], ["sunset", "window"], ["crimson", "cubes"],
+                  ["rosepink", "window"], ["ember", "window"], ["magenta", "window"], ["peach", "window"], ["midnight", "code"],
+                  ["bouquet", "fine"], ["sunflower", "cubes"], ["wildred", "code"], ["coral", "cubes"]];
+// his own picks (hearted in the gallery) arrive as schedule.json next to the page: {"from": <day index>, "days": ["rust-window", ...]}
+let SCHED_FROM = 0;
+async function loadSchedule() {
+  try {
+    const r = await fetch("schedule.json", { cache: "no-cache" });
+    if (!r.ok) return;
+    const j = await r.json();
+    const days = (j.days || []).map(x => String(x).split("-")).filter(x => BOUQUETS.includes(x[0]) && stylesOf(x[0]).includes(x[1]));
+    if (days.length) { SCHEDULE = days; SCHED_FROM = +j.from || 0; }
+  } catch (e) {}
+}
+function todaysPick() {
+  const d = dayIndex() - SCHED_FROM, sc = SCHEDULE[((d % SCHEDULE.length) + SCHEDULE.length) % SCHEDULE.length];
+  const b = BOUQUETS.includes(QP.get("vid")) ? QP.get("vid") : sc[0];
+  return { b, style: stylesOf(b).includes(QP.get("style")) ? QP.get("style") : (QP.has("vid") ? "window" : sc[1]) };
+}
+// ?preview=1&gallery=1: every bouquet in every style, looping side by side; tap one to open it
+function gallery() {
+  logEl.hidden = true; statusEl.hidden = true; canvas.style.visibility = "hidden";
+  document.body.style.background = "#000"; document.body.style.overflow = "auto";
+  const g = document.createElement("div");
+  g.style.cssText = "position:fixed;inset:0;overflow-y:auto;background:#000;z-index:60;padding:10px;display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));grid-auto-rows:max-content;align-content:start;gap:8px;font:600 12px system-ui,-apple-system,sans-serif;color:#ffc2e6";
+  const head = document.createElement("div");
+  head.style.cssText = "grid-column:1/-1;text-align:center;padding:6px 0 2px;font-size:14px";
+  head.textContent = "Every bouquet ♥ tap one to open it";
+  g.appendChild(head);
+  const io = "IntersectionObserver" in window ? new IntersectionObserver(es => es.forEach(e => {
+    const v = e.target;
+    if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); } else v.pause();
+  }), { rootMargin: "200px" }) : null;
+  const section = txt => { const h = document.createElement("div"); h.style.cssText = head.style.cssText + ";padding-top:14px"; h.textContent = txt; g.appendChild(h); };
+  // hearts: his picks for the days, in the order he taps them, kept in his phone's browser until he sends them
+  let picks = []; try { picks = JSON.parse(localStorage.getItem("camilaPicks") || "[]"); } catch (e) {}
+  const savePicks = () => { try { localStorage.setItem("camilaPicks", JSON.stringify(picks)); } catch (e) {} };
+  const hearts = [];
+  const paintHearts = () => {
+    hearts.forEach(h => { const i = picks.indexOf(h.dataset.key); h.textContent = i < 0 ? "♡" : "♥ " + (i + 1); h.style.background = i < 0 ? "rgba(0,0,0,.55)" : "rgba(255,60,150,.9)"; });
+    foot.textContent = picks.length ? "♥ " + picks.length + " picked · use these" : "tap ♡ on the ones you want, in day order";
+  };
+  const foot = document.createElement("button");
+  foot.style.cssText = "position:fixed;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom, 0px) + 10px);z-index:70;background:rgba(40,8,40,.94);color:#ffc2e6;border:1px solid #ff6fc8;border-radius:14px;padding:12px;font:600 14px system-ui,-apple-system,sans-serif";
+  foot.addEventListener("click", () => {
+    if (!picks.length) return;
+    const pan = document.createElement("div");
+    pan.style.cssText = "position:fixed;inset:0;z-index:80;background:rgba(0,0,0,.92);color:#ffc2e6;padding:22px 16px;overflow:auto;font:600 14px system-ui,-apple-system,sans-serif";
+    const code = picks.join(", ");
+    pan.innerHTML = "<div style='font-size:16px;margin-bottom:10px'>Your picks, one per day ♥</div>" +
+      picks.map((k, i) => "<div style='padding:3px 0'>day " + (i + 1) + ": " + k.replace("-", " · ") + "</div>").join("") +
+      "<div style='margin:14px 0 6px'>Copy this and send it to Claude:</div>";
+    const ta = document.createElement("textarea"); ta.value = code; ta.readOnly = true;
+    ta.style.cssText = "width:100%;height:90px;background:#120412;color:#fff;border:1px solid #ff6fc8;border-radius:10px;padding:8px;font:13px monospace";
+    pan.appendChild(ta);
+    const mk = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.style.cssText = "margin:12px 8px 0 0;background:rgba(40,8,40,.9);color:#ffc2e6;border:1px solid #ff6fc8;border-radius:12px;padding:10px 14px;font:600 14px system-ui"; b.addEventListener("click", fn); pan.appendChild(b); return b; };
+    const cp = mk("copy", () => { ta.select(); (navigator.clipboard ? navigator.clipboard.writeText(code) : Promise.reject()).then(() => { cp.textContent = "copied ♥"; }, () => { document.execCommand && document.execCommand("copy"); cp.textContent = "copied ♥"; }); });
+    mk("clear all", () => { if (confirm("Clear all your hearts?")) { picks = []; savePicks(); paintHearts(); pan.remove(); } });
+    mk("close", () => pan.remove());
+    document.body.appendChild(pan);
+  });
+  g.style.paddingBottom = "80px";
+  const tile = (b, st) => {
+    const a = document.createElement("a");
+    a.href = location.pathname + "?" + new URLSearchParams({ preview: 1, vid: b, style: st, msg: -1 });
+    a.style.cssText = "display:block;border:1px solid #ff6fc8;border-radius:10px;overflow:hidden;background:#000;text-decoration:none;color:#ffc2e6";
+    const v = document.createElement("video");
+    v.muted = true; v.loop = true; v.playsInline = true; v.preload = "none";
+    v.setAttribute("muted", ""); v.setAttribute("playsinline", "");
+    v.dataset.src = "vid/" + b + "-" + (st === "trippy" ? "window" : st) + ".mp4";
+    v.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:cover;image-rendering:pixelated" + (st === "trippy" ? ";filter:saturate(1.7) hue-rotate(120deg)" : "");
+    const box = document.createElement("div"); box.style.cssText = "position:relative;width:100%;padding-top:211%;background:#000"; box.appendChild(v);
+    const t = document.createElement("div"); t.textContent = b + " · " + st; t.style.cssText = "padding:6px 8px;text-align:center";
+    a.style.position = "relative";
+    const h = document.createElement("button"); h.dataset.key = b + "-" + st;
+    h.style.cssText = "position:absolute;top:6px;right:6px;z-index:2;min-width:38px;height:34px;border-radius:17px;border:1px solid #ff6fc8;color:#fff;font:700 15px system-ui;padding:0 9px";
+    h.addEventListener("click", e => {
+      e.preventDefault(); e.stopPropagation();
+      const i = picks.indexOf(h.dataset.key);
+      if (i < 0) picks.push(h.dataset.key); else picks.splice(i, 1);
+      savePicks(); paintHearts();
+    });
+    hearts.push(h);
+    a.appendChild(box); a.appendChild(t); a.appendChild(h); g.appendChild(a);
+    if (io) io.observe(v); else { v.src = v.dataset.src; v.play().catch(() => {}); }
+  };
+  BOUQUETS.forEach(b => tile(b, "window"));
+  section("the other styles");
+  BOUQUETS.forEach(b => stylesOf(b).forEach(st => { if (st !== "window") tile(b, st); }));
+  document.body.appendChild(foot); paintHearts();
+  document.body.appendChild(g);
+}
+function previewBar() {
+  const pk = todaysPick(), msg = QP.has("msg") ? +QP.get("msg") : -1;
+  const go = o => { const q = new URLSearchParams({ preview: 1, vid: o.b, style: o.style, msg: o.msg }); location.href = location.pathname + "?" + q; };
+  const cur = { b: pk.b, style: pk.style, msg };
+  const step = (list, v, dir) => list[(list.indexOf(v) + dir + list.length) % list.length];
+  const msgs = NOTES.length + 1, mstep = dir => ((msg + 1 + dir + msgs) % msgs) - 1;
+  const bar = document.createElement("div");
+  bar.style.cssText = "position:fixed;left:6px;right:6px;top:calc(env(safe-area-inset-top, 0px) + 8px);z-index:50;display:grid;grid-template-columns:auto 1fr auto;gap:5px;font:600 12px system-ui,-apple-system,sans-serif";
+  const btn = (label, fn) => {
+    const b = document.createElement("button"); b.textContent = label;
+    b.style.cssText = "background:rgba(40,8,40,.88);color:#ffc2e6;border:1px solid #ff6fc8;border-radius:12px;padding:8px 12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis";
+    b.addEventListener("touchstart", e => e.stopPropagation(), { passive: true });
+    b.addEventListener("touchend", e => e.stopPropagation(), { passive: true });
+    b.addEventListener("click", e => { e.stopPropagation(); fn(); });
+    bar.appendChild(b);
+  };
+  const row = (label, prev, next) => { btn("◀", prev); btn(label, next); btn("▶", next); };
+  row("bouquet: " + cur.b, () => go({ ...cur, b: step(BOUQUETS, cur.b, -1) }), () => go({ ...cur, b: step(BOUQUETS, cur.b, 1) }));
+  row("style: " + cur.style, () => go({ ...cur, style: step(stylesOf(cur.b), cur.style, -1) }), () => go({ ...cur, style: step(stylesOf(cur.b), cur.style, 1) }));
+  row("message " + (msg + 2) + "/" + msgs, () => go({ ...cur, msg: mstep(-1) }), () => go({ ...cur, msg: mstep(1) }));
+  bar.appendChild(document.createElement("span"));
+  btn("see all bouquets", () => { location.href = location.pathname + "?preview=1&gallery=1"; });
+  document.body.appendChild(bar);
+}
+function startVideo(kind, style) {
+  const file = kind + "-" + (style === "trippy" ? "window" : style);
+  canvas.style.visibility = "hidden";
+  statusEl.textContent = "♥  " + todaysNote() + "  ♥";
+  pv = document.createElement("video");
+  pv.muted = true; pv.loop = true; pv.autoplay = true; pv.playsInline = true; pv.preload = "auto";
+  pv.setAttribute("muted", ""); pv.setAttribute("playsinline", "");
+  pv.style.cssText = "position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;image-rendering:pixelated;pointer-events:none";
+  let triedLive = false;
+  pv.addEventListener("error", () => { if (!triedLive) { triedLive = true; pv.src = "https://slavock.github.io/for-camila/vid/" + file + ".mp4"; pv.play().catch(() => {}); } });
+  pv.src = "vid/" + file + ".mp4";
+  canvas.parentNode.appendChild(pv);
+  pv.play().catch(() => {});
+  // ?look=trippy: the same bouquet, colours drifting through the rainbow, with a breathing echo of itself behind in opposite colours
+  if (style === "trippy") {
+    const st = document.createElement("style");
+    st.textContent = "@keyframes hue{to{filter:hue-rotate(360deg) saturate(1.7) contrast(1.12)}}" +
+      "@keyframes breathe{0%,100%{transform:scale(1.06)}50%{transform:scale(1.16)}}" +
+      ".trip{filter:hue-rotate(0deg) saturate(1.7) contrast(1.12);animation:hue 18s linear infinite}" +
+      ".echo{opacity:.38;mix-blend-mode:screen;animation:hue 18s linear infinite reverse,breathe 6s ease-in-out infinite}";
+    document.head.appendChild(st);
+    const echo = pv.cloneNode(); echo.muted = true; echo.classList.add("echo");
+    echo.style.cssText = pv.style.cssText; echo.style.transformOrigin = "50% 45%";
+    canvas.parentNode.insertBefore(echo, pv);
+    pv.style.background = "transparent"; pv.classList.add("trip");
+    echo.src = pv.src; echo.play().catch(() => {});
+    pv.addEventListener("timeupdate", () => { if (Math.abs(echo.currentTime - pv.currentTime) > 0.25) echo.currentTime = pv.currentTime; });
+  }
+  // the day's line in pink pixel cursive where the renderer used to write it; no separate line at the bottom
+  statusEl.hidden = true;
+  const pc = document.createElement("canvas");
+  pc.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;image-rendering:pixelated";
+  canvas.parentNode.appendChild(pc);
+  const mq = QP.get("msg");
+  const line = mq === null ? (dayIndex() === 0 ? "I love you Camila" : todaysNote()) : (+mq < 0 ? "I love you Camila" : NOTES[+mq % NOTES.length]);
+  const drawLine = () => {
+    const r = pc.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 3);
+    pc.width = Math.round(r.width * d); pc.height = Math.round(r.height * d);
+    const VW = pv.videoWidth || 610, VH = pv.videoHeight || 1330, s = Math.min(pc.width / VW, pc.height / VH);
+    const dw = VW * s, dh = VH * s, ox = (pc.width - dw) / 2, oy = (pc.height - dh) / 2;
+    const cell = (style === "window" || style === "trippy" ? VW / 112 : VW / 244) * s;   // chunky letters for his window style, finer otherwise
+    const lw = Math.round(dw / cell), lh = Math.round(dh * 0.20 / cell);
+    const low = document.createElement("canvas"); low.width = lw; low.height = lh;
+    const g = low.getContext("2d");
+    // one line, or two balanced lines when it is long
+    const words = line.split(" ");
+    let size = Math.round(lh * 0.42), lines = [line];
+    const fit = () => { g.font = "700 " + size + "px 'Dancing Script', cursive"; return Math.max(...lines.map(t => g.measureText(t).width)); };
+    while (fit() > lw * 0.92 && size > lh * 0.27) size--;          // stay on one line while it is still big enough
+    if (fit() > lw * 0.92 && words.length > 1) {
+      const diff = k => Math.abs(words.slice(0, k).join(" ").length - words.slice(k).join(" ").length);
+      let best = 1; for (let k = 2; k < words.length; k++) if (diff(k) < diff(best)) best = k;
+      lines = [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+      size = Math.round(lh * 0.34);
+    }
+    while (fit() > lw * 0.92 && size > 6) size--;
+    g.textAlign = "center"; g.textBaseline = "middle";
+    const grad = g.createLinearGradient(0, 0, lw, 0);
+    grad.addColorStop(0, "#ff8fd8"); grad.addColorStop(0.5, "#e070ff"); grad.addColorStop(1, "#ff7fc0");
+    const yAt = i => lh * (lines.length === 1 ? 0.55 : (0.32 + 0.40 * i));
+    // a soft glow behind, then the crisp letters
+    g.filter = "blur(" + Math.max(1, Math.round(size * 0.12)) + "px)"; g.globalAlpha = 0.55; g.fillStyle = "#ff5fc8";
+    lines.forEach((t, i) => g.fillText(t, lw / 2, yAt(i)));
+    g.filter = "none"; g.globalAlpha = 1; g.fillStyle = grad;
+    lines.forEach((t, i) => g.fillText(t, lw / 2, yAt(i)));
+    const pg = pc.getContext("2d"); pg.imageSmoothingEnabled = false; pg.clearRect(0, 0, pc.width, pc.height);
+    pg.drawImage(low, ox, oy + dh * 0.79, lw * cell, lh * cell);
+  };
+  const go = () => { try { drawLine(); } catch (e) {} };
+  (document.fonts && document.fonts.load ? document.fonts.load("700 40px 'Dancing Script'") : Promise.resolve()).then(go, go);
+  window.addEventListener("resize", go);
+  pv.addEventListener("loadedmetadata", go);
+  document.body.style.background = "#000"; document.documentElement.style.setProperty("--bg", "#000");
+}
+
 // spinning by hand: a finger anywhere on the screen (touch events), or a mouse on the canvas
 let downY = 0, lastTap = 0;
-function dragStart(x, y) { dragging = true; lastX = downX = x; downY = y; downT = performance.now(); }
-function dragMove(x) { if (!dragging) return; const dx = x - lastX; lastX = x; ang += dx * 0.012; vel = Math.max(-6, Math.min(6, dx * 0.6)); }
+function dragStart(x, y) { dragging = true; lastX = downX = x; downY = y; downT = performance.now(); if (pv) pv.pause(); }
+function dragMove(x) {
+  if (!dragging) return; const dx = x - lastX; lastX = x;
+  if (pv && pv.duration) { pv.currentTime = ((pv.currentTime + dx * 0.012 / VID_SPIN) % pv.duration + pv.duration) % pv.duration; return; }
+  ang += dx * 0.012; vel = Math.max(-6, Math.min(6, dx * 0.6));
+}
 function dragEnd(x, y) {
   if (!dragging) return; dragging = false;
+  if (pv) pv.play().catch(() => {});
   if (Math.abs(x - downX) < 8 && performance.now() - downT < 300) {
     const now = performance.now();
     if (now - lastTap < 350) t0 = now / 1000 - 2.8;          // double tap: grow it again
@@ -563,11 +827,14 @@ canvas.addEventListener("pointercancel", e => { if (e.pointerType !== "touch") d
 
 // ---------- a new surprise every day: the bouquet, then cute things built from simple 3D shapes ----------
 // the florist bouquets come first, the cute extras after them
-const FLOWERS = ["bouquet", "crimson", "obsession", "moonlight", "lavender", "sakura", "blush"];
+const FLOWERS = ["bouquet", "crimson", "obsession", "ivory", "wildred", "rosepink", "ember", "magenta", "peach"];
 const KINDS = FLOWERS.concat(["teddy", "heart", "bunny", "cupcake", "kitty"]);
 const STILL = new URLSearchParams(location.search).has("still");
 // ?look=holo shows the words only, ?look=real shows the real flowers only; the default shows both
-const LOOK = ({ holo: 1, real: 2 })[new URLSearchParams(location.search).get("look")] || 0;
+// default = the pixel look (like the PowerShell bouquet); ?look=words = readable words over the flower, holo = words only, real = solid
+const LOOK = ({ words: 0, holo: 1, real: 2, pixel: 3, trippy: 3 })[new URLSearchParams(location.search).get("look")] ?? 3;
+// ?preview=1 shows a small switcher bar (for him, never on her plain link): bouquet, message and look
+const QP = new URLSearchParams(location.search), PREVIEW = QP.has("preview");
 const LABELS = { bouquet: "50 flowers", teddy: "a teddy bear", heart: "a heart", bunny: "a bunny", cupcake: "a cupcake", kitty: "a kitty" };
 function todaysKind() {
   const h = (location.hash || "").replace("#", "");
@@ -600,6 +867,24 @@ const DAYS = {
   blush:   { words: ["soft", "bloom", "darling", "♥", "yours", "Camila", "sweet", "blush"], sep: " · ",
              line: "Softly yours, Camila", font: "'Great Vibes'", weight: "400", inkA: [1.0, 0.72, 0.80], inkB: [1.0, 0.90, 0.85],
              log: "arranging blush roses and white orchids for Camila", status: "soft and sweet", unit: "flowers" },
+  ivory:   { words: ["orchid"], sep: " ", style: 1,
+             line: "Pure, soft, all yours", font: "'Great Vibes'", weight: "400", inkA: [0.95, 0.92, 1.0], inkB: [1.0, 0.75, 0.85],
+             log: "gathering a cloud of white orchids for Camila", status: "drawn in pearl dots", unit: "flowers" },
+  wildred: { words: ["wild", "fire", "♥", "mine", "Camila", "burning", "for you", "untamed"], sep: " · ",
+             line: "Wild for you", font: "'Dancing Script'", weight: "700", inkA: [1.0, 0.20, 0.25], inkB: [1.0, 0.55, 0.30],
+             log: "arranging something wild and red for Camila", status: "wild and red", unit: "flowers" },
+  rosepink: { words: ["rose"], sep: " ", style: 2,
+             line: "Pretty in pink, Camila", font: "'Great Vibes'", weight: "400", inkA: [1.0, 0.60, 0.75], inkB: [1.0, 0.85, 0.92],
+             log: "wrapping pink roses and orchids for Camila", status: "engraved roses", unit: "flowers" },
+  ember:   { words: ["if (you) { warm(); }", "let fire = you;", "/* my heart */", "glow(camila);", "00101010", "return home;", "while (near) smile();"], sep: "   ",
+             line: "You set my heart on fire", font: "'Dancing Script'", weight: "700", inkA: [1.0, 0.45, 0.20], inkB: [1.0, 0.25, 0.30],
+             log: "compiling orange roses in black paper for Camila", status: "written in code", unit: "flowers" },
+  magenta: { words: ["lily"], sep: " ", style: 1,
+             line: "Bold, bright, beautiful", font: "'Dancing Script'", weight: "700", inkA: [1.0, 0.30, 0.70], inkB: [0.90, 0.35, 1.0],
+             log: "letting magenta lilies open for Camila", status: "drawn in dots", unit: "flowers" },
+  peach:   { words: ["golden", "cozy", "♥", "autumn", "Camila", "warm", "home", "always"], sep: " · ",
+             line: "My favorite season is you", font: "'Great Vibes'", weight: "400", inkA: [1.0, 0.80, 0.60], inkB: [1.0, 0.65, 0.55],
+             log: "drying autumn flowers for Camila", status: "golden and dried", unit: "flowers" },
   teddy:   { words: ["hug", "cuddle", "♥", "warm", "safe with you", "my favorite", "hold me", "Camila", "always"], sep: " · ",
              line: "A big hug for you", font: "'Pacifico'", weight: "400", inkA: [1.0, 0.72, 0.45], inkB: [1.0, 0.45, 0.65],
              log: "wrapping a teddy bear in hugs for Camila", status: "made of hugs" },
@@ -624,6 +909,12 @@ const MOODS = {
   lavender: { bg: [0.030, 0.020, 0.050], bgC: [0.090, 0.060, 0.150], star: [0.92, 0.85, 1.0], grade: [1.00, 0.97, 1.05] }, // lavender dusk
   sakura:  { bg: [0.045, 0.025, 0.035], bgC: [0.130, 0.070, 0.090], star: [1.0, 0.88, 0.92], grade: [1.04, 0.97, 0.99] }, // spring evening
   blush:   { bg: [0.045, 0.030, 0.035], bgC: [0.130, 0.085, 0.090], star: [1.0, 0.90, 0.88], grade: [1.03, 0.98, 0.98] }, // blush
+  ivory:   { bg: [0.020, 0.022, 0.032], bgC: [0.070, 0.072, 0.095], star: [0.95, 0.95, 1.0], grade: [1.00, 1.00, 1.03] }, // pearl grey
+  wildred: { bg: [0.030, 0.008, 0.010], bgC: [0.095, 0.015, 0.020], star: [1.0, 0.80, 0.70], grade: [1.05, 0.95, 0.95] }, // ember night
+  rosepink: { bg: [0.040, 0.020, 0.032], bgC: [0.120, 0.055, 0.085], star: [1.0, 0.88, 0.94], grade: [1.03, 0.97, 1.00] }, // rose
+  ember:   { bg: [0.030, 0.014, 0.010], bgC: [0.100, 0.040, 0.020], star: [1.0, 0.85, 0.70], grade: [1.05, 0.97, 0.92] }, // ember
+  magenta: { bg: [0.035, 0.010, 0.030], bgC: [0.110, 0.025, 0.085], star: [1.0, 0.80, 0.95], grade: [1.03, 0.95, 1.03] }, // magenta
+  peach:   { bg: [0.040, 0.028, 0.018], bgC: [0.120, 0.085, 0.055], star: [1.0, 0.90, 0.78], grade: [1.04, 0.99, 0.93] }, // golden hour
   teddy:   { bg: [0.040, 0.022, 0.012], bgC: [0.120, 0.060, 0.026], star: [1.0, 0.88, 0.68], grade: [1.06, 0.98, 0.90] }, // candlelight
   heart:   { bg: [0.045, 0.008, 0.016], bgC: [0.135, 0.014, 0.040], star: [1.0, 0.76, 0.80], grade: [1.08, 0.92, 0.95] }, // deep crimson
   bunny:   { bg: [0.022, 0.014, 0.048], bgC: [0.075, 0.040, 0.135], star: [0.88, 0.82, 1.0], grade: [0.98, 0.95, 1.08] }, // midnight violet
@@ -764,6 +1055,11 @@ async function start() {
     document.body.style.background = "#" + hex;
     const tc = document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = "#" + hex;
     if (STILL) { logEl.hidden = true; statusEl.hidden = true; }
+    if (LOOK === 3) { logEl.hidden = true; statusEl.classList.add("foryou"); }
+    // flower days in the pixel look play the PowerShell renderer's own recording (one full turn, looping); a finger turns it
+    if (PREVIEW && QP.has("gallery")) { gallery(); return; }
+    if (LOOK === 3 && !STILL) { await loadSchedule(); const pk = todaysPick(); startVideo(pk.b, pk.style); if (PREVIEW) previewBar(); return; }
+    if (PREVIEW && !STILL) previewBar();   // his design: the same bouquet every day, a new message under it
     const flower = FLOWERS.includes(kind);
     const buf = flower ? await loadPoints(kind) : buildShape(kind);
     if (flower && kind !== "bouquet") { META = Object.assign({}, METAS[kind]); META.label = META.heads + " " + (CUR.unit || "flowers"); }

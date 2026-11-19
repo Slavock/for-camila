@@ -3,18 +3,50 @@
 // Then on the home screen: long-press > + > Scriptable > Large (or Small) > Add, tap it to edit, Script = "For Camila".
 
 const BASE = "https://slavock.github.io/for-camila/";
-const KINDS = ["bouquet", "crimson", "obsession", "moonlight", "lavender", "sakura", "blush", "teddy", "heart", "bunny", "cupcake", "kitty"];
+const KINDS = ["bouquet"];
 const NOTES = [
-  "Every day with you is my favorite day.", "You make my heart smile.", "I'd pick you in every lifetime.",
-  "You're my safe place.", "Thinking about you, like always.", "Your laugh is my favorite sound.",
-  "You and me are my favorite story.", "I'm so lucky it's you.", "You look beautiful today. You always do.",
-  "I can't wait to see you.", "You're my sunshine on cloudy days.", "Holding your hand is my favorite thing.",
-  "You make ordinary days feel special.", "I love you more than yesterday.", "You're cuter than any cupcake.",
-  "My heart is all yours.", "I hope today is as sweet as you.", "You're my favorite notification.",
-  "Every flower here is for you.", "You're my person.", "Sending you a million hugs.",
-  "You make everything better.", "I'm proud of you, always.", "You and me, forever.",
-  "Smile, someone loves you a lot. Me.", "You're the best part of my day.", "Home is wherever you are.",
-  "You deserve all the flowers.", "Thank you for being you.", "I love you, Camila."
+  "I hope today is as beautiful as you are",
+  "You walk in beauty, like the night of starry skies",
+  "I hope you smiled today",
+  "The stars came out tonight just to look at you",
+  "Thinking about you, like always",
+  "Shall I compare you to a summer's day? You are more lovely",
+  "I hope your day is gentle with you",
+  "Some beauty is loud. Yours is quiet, and it stays",
+  "You make everything better, just by being you",
+  "You're the kind of beautiful that makes the world slow down",
+  "I'm so proud of you",
+  "Light finds you first, then everything else",
+  "I hope you know how loved you are",
+  "Even the moon looks a little shy next to you",
+  "Can't wait to see you",
+  "You're beautiful in a way words keep trying to catch",
+  "You deserve the softest, happiest day",
+  "The universe made a lot of stars, then it made you",
+  "I'm lucky it's you",
+  "Your smile is my favorite view",
+  "I hope today brings you something sweet",
+  "Every sunset tries, but you're still the prettiest thing I've seen",
+  "Missing you a little more than yesterday",
+  "You glow without even trying",
+  "Whatever today brings, I'm on your side",
+  "You're my favorite person",
+  "I hope you feel as special as you are",
+  "Don't forget to take care of yourself today",
+  "Every day with you is a good day",
+  "I hope the sun is kind to you today",
+  "You make me want to be better",
+  "Sending you a hug from here",
+  "I hope someone makes you laugh today",
+  "You're beautiful, inside and out",
+  "I'm always here for you",
+  "I hope you rest well tonight",
+  "Still falling for you",
+  "You're the best part of my day",
+  "I hope today feels light",
+  "Good things are coming your way",
+  "Thank you for being you",
+  "I love you, Camila"
 ];
 
 const now = new Date();
