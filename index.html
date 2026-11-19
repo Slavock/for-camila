@@ -102,7 +102,9 @@ async function loadPoints(kind) {
     return gunzip(new Blob([Uint8Array.from(atob(b64), c => c.charCodeAt(0))]));
   }
   // the other florist bouquets live next to the page, one small file each
-  const r = await fetch("pts/" + kind + ".bin.gz");
+  let r = null;
+  try { r = await fetch("pts/" + kind + ".bin.gz"); } catch (e) {}
+  if (!r || !r.ok) r = await fetch("https://slavock.github.io/for-camila/pts/" + kind + ".bin.gz");   // the private copy borrows them from the live site
   if (!r.ok) throw new Error("today's flowers did not load");
   return gunzip(await r.blob());
 }
