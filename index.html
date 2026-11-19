@@ -860,7 +860,8 @@ function startVideo(kind, style, daily) {
   // bigger on her phone (he said it looked small): fill the width, then a little zoom on the flowers (only empty stars get cropped)
   const ZOOM = 1.04;
   canvas.parentNode.style.overflow = "hidden";   // the zoomed video must never cover the PowerShell lines above it
-  pv.style.objectFit = "cover"; pv.style.transformOrigin = "50% 42%"; pv.style.transform = "scale(" + ZOOM + ")";
+  const LIFT = "translateY(-7%) ";   // the bouquet sits a little higher so her line underneath is clear (his ask, 11-19)
+  pv.style.objectFit = "cover"; pv.style.transformOrigin = "50% 42%"; pv.style.transform = LIFT + "scale(" + ZOOM + ")";
   let triedLive = false;
   pv.addEventListener("error", () => { if (!triedLive) { triedLive = true; pv.src = "https://slavock.github.io/for-camila/" + (daily ? daily.v : "vid/" + file + ".mp4"); pv.play().catch(() => {}); } });
   pv.src = daily ? daily.v : "vid/" + file + ".mp4";
@@ -895,7 +896,7 @@ function startVideo(kind, style, daily) {
     vids.forEach(el => { el.style.visibility = "hidden"; });          // it keeps playing (iPhones only decode playing video), just unseen
     clip(pc, "inset(0 100% 0 0)");
     const ov = document.createElement("canvas");
-    ov.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;transform-origin:50% 42%;transform:scale(" + ZOOM + ")";
+    ov.style.cssText = "position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;transform-origin:50% 42%;transform:" + LIFT + "scale(" + ZOOM + ")";
     stage.appendChild(ov);
     const GLYPHS = "01{}[]<>/*+=;:#&%$ILOVECAMILAilovecamila";
     const bar = p => { const n = 16, k = Math.round(p * n); return "█".repeat(k) + "░".repeat(n - k); };
