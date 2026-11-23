@@ -804,8 +804,8 @@ const HEADS = { bouquet: 50, obsession: 47, wildred: 12, ivory: 45, rosepink: 45
 let LOG_FULL = "", LOG_STOP = false;
 function videoLog(kind) {
   logEl.hidden = false;
-  logEl.style.whiteSpace = "pre-wrap"; logEl.style.minHeight = "calc(6 * 1.55em)";   // room for the render line and [♥], so the bouquet never jumps
-  const cmd = ".\\bouquet.ps1", L = ["compiling renderer ..... HD","today: " + (HEADS[kind] || 20) + " flowers ..... " + (POINTS[kind] || 150000).toLocaleString("en-US") + " points",
+  logEl.style.whiteSpace = "pre-wrap"; logEl.style.minHeight = "calc(5 * 1.55em)";   // room for the render line and [♥], so the bouquet never jumps
+  const cmd = ".\\bouquet.ps1", L = ["compiling renderer ..... HD",
       (MAKING[kind] || "arranging flowers") + " for Camila"];
   const t0v = performance.now() / 1000;
   LOG_FULL = 'PS C:\\flowers&gt; <span class="c">' + cmd + "</span>" + L.map(x => '\n<span class="k">[ok]</span> <span class="d">' + x + "</span>").join("");
@@ -854,7 +854,7 @@ async function showViews() {
 // fonts for her line (11-23): a day may carry "font" (his pick in his picker); default Dancing Script
 const LINE_FONTS = [["Dancing Script", "700"], ["Great Vibes", "400"], ["Pacifico", "400"], ["Satisfy", "400"], ["Kaushan Script", "400"],
                     ["Caveat", "700"], ["Courgette", "400"], ["Homemade Apple", "400"], ["Playball", "400"]];
-function lineFont(name) { const f = LINE_FONTS.find(x => x[0] === name) || LINE_FONTS[0]; return { f: f[0], w: f[1] }; }
+function pickFont(name) { const f = LINE_FONTS.find(x => x[0] === name) || LINE_FONTS[0]; return { f: f[0], w: f[1] }; }
 function startVideo(kind, style, daily) {
   const file = kind + "-" + (style === "trippy" ? "window" : style);
   if (!PREVIEW) videoLog(kind);
@@ -969,54 +969,81 @@ function startVideo(kind, style, daily) {
   }
   const mq = QP.get("msg");
   const line = QP.get("line") || (daily && QP.get("msg") === null ? daily.line : null) || (mq === null ? (PICK_LINE || (dayIndex() === 0 ? "I love you Camila" : todaysNote())) : (+mq < 0 ? "I love you Camila" : NOTES[+mq % NOTES.length]));
-  const LF = lineFont(QP.get("font") || (daily && daily.font));
+  const LF = pickFont(QP.get("font") || (daily && daily.font));
   const drawLine = () => {
     const r = pc.getBoundingClientRect(), d = Math.min(window.devicePixelRatio || 1, 3);
     pc.width = Math.round(r.width * d); pc.height = Math.round(r.height * d);
     const VW = pv.videoWidth || 610, VH = pv.videoHeight || 1330, s = Math.min(pc.width / VW, pc.height / VH);
     const dw = VW * s, dh = VH * s, ox = (pc.width - dw) / 2, oy = (pc.height - dh) / 2;
-    const cell = VW / 236 * s;   // fine pixels for every style: the chunky 112-grid letters were unreadable on her phone
-    const lw = Math.round(dw / cell), lh = Math.round(dh * 0.20 / cell);
+    // the line spans the SCREEN's width (11-23: laid out inside the video's narrower box it came out half size on her phone);
+    // capped on wide screens so it never stretches across a laptop
+    const bw = Math.min(pc.width, dh * 0.95), bx = (pc.width - bw) / 2;
+    const cell = bw / 300;
+    const lw = 300, lh = Math.round(dh * 0.20 / cell);
     const low = document.createElement("canvas"); low.width = lw; low.height = lh;
     const g = low.getContext("2d");
-    // one line, or two balanced lines when it is long
+    // her phone (11-23 4:14 AM, his screenshot "i can barley read this"): the line came out thin and tiny. Bigger letters now:
+    // one line, else two, else three balanced lines, never shrunk below a readable size; a dark outline and thickened
+    // light-pink letters so it reads over the flowers and the dark
     const words = line.split(" ");
+    // never the phone's own 'cursive' (on iPhones that is the thin Snell Roundhand script she got 11-23)
+    const FB = "'" + LF.f + "', 'Bradley Hand', 'Chalkboard SE', 'Segoe Print', 'Comic Sans MS', sans-serif";
     let size = Math.round(lh * 0.42), lines = [line];
-    const fit = () => { g.font = LF.w + " " + size + "px '" + LF.f + "', cursive"; return Math.max(...lines.map(t => g.measureText(t).width)); };
-    while (fit() > lw * 0.92 && size > lh * 0.27) size--;          // stay on one line while it is still big enough
-    if (fit() > lw * 0.92 && words.length > 1) {
+    const W = lw * 0.94;
+    const fit = () => { g.font = LF.w + " " + size + "px " + FB; return Math.max(...lines.map(t => g.measureText(t).width)); };
+    while (fit() > W && size > lh * 0.36) size--;          // stay on one line while it is still big
+    if (fit() > W && words.length > 1) {
       const diff = k => Math.abs(words.slice(0, k).join(" ").length - words.slice(k).join(" ").length);
       let best = 1; for (let k = 2; k < words.length; k++) if (diff(k) < diff(best)) best = k;
       lines = [words.slice(0, best).join(" "), words.slice(best).join(" ")];
-      size = Math.round(lh * 0.34);
-      while (fit() > lw * 0.92 && size > lh * 0.25) size--;
+      size = Math.round(lh * 0.38);
+      while (fit() > W && size > lh * 0.31) size--;
     }
-    // a long line of his own (11-23): three balanced lines instead of two shrunken ones, so it stays readable on her phone
-    if (fit() > lw * 0.92 && words.length > 2) {
+    if (fit() > W && words.length > 2) {                   // a long line: three balanced lines instead of two shrunken ones
       const L = (a, b) => words.slice(a, b).join(" ").length;
       let bk = [1, 2], bm = 1e9;
       for (let a = 1; a < words.length - 1; a++) for (let b = a + 1; b < words.length; b++) {
         const m = Math.max(L(0, a), L(a, b), L(b, words.length)); if (m < bm) { bm = m; bk = [a, b]; }
       }
       lines = [words.slice(0, bk[0]).join(" "), words.slice(bk[0], bk[1]).join(" "), words.slice(bk[1]).join(" ")];
-      size = Math.round(lh * 0.30);
+      size = Math.round(lh * 0.31);
     }
-    while (fit() > lw * 0.92 && size > 6) size--;
-    g.textAlign = "center"; g.textBaseline = "middle";
+    while (fit() > W && size > 6) size--;
+    g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
     const grad = g.createLinearGradient(0, 0, lw, 0);
-    grad.addColorStop(0, "#ff8fd8"); grad.addColorStop(0.5, "#e070ff"); grad.addColorStop(1, "#ff7fc0");
-    const gap = lines.length === 3 ? 0.29 : 0.40, mid = 0.52;
+    grad.addColorStop(0, "#ffc6ee"); grad.addColorStop(0.5, "#f1b8ff"); grad.addColorStop(1, "#ffc0e2");
+    const gap = lines.length === 3 ? 0.31 : 0.42, mid = 0.52;
     const yAt = i => lh * (lines.length === 1 ? 0.55 : (mid - gap * (lines.length - 1) / 2 + gap * i));
-    // a soft glow behind, then the crisp letters
-    g.filter = "blur(" + Math.max(1, Math.round(size * 0.12)) + "px)"; g.globalAlpha = 0.55; g.fillStyle = "#ff5fc8";
-    lines.forEach((t, i) => g.fillText(t, lw / 2, yAt(i)));
-    g.filter = "none"; g.globalAlpha = 1; g.fillStyle = grad;
-    lines.forEach((t, i) => g.fillText(t, lw / 2, yAt(i)));
+    const each = f => lines.forEach((t, i) => f(t, lw / 2, yAt(i)));
+    g.filter = "blur(" + Math.max(1, Math.round(size * 0.14)) + "px)"; g.globalAlpha = 0.6; g.fillStyle = "#ff4fc0";
+    each((t, x, y) => g.fillText(t, x, y));                                        // soft pink glow
+    g.filter = "none"; g.globalAlpha = 1;
+    g.strokeStyle = "rgba(18,0,22,0.92)"; g.lineWidth = Math.max(2, size * 0.16);
+    each((t, x, y) => g.strokeText(t, x, y));                                      // dark outline
+    g.strokeStyle = grad; g.lineWidth = Math.max(1, size * 0.045);
+    each((t, x, y) => g.strokeText(t, x, y));                                      // thicken thin script strokes
+    g.fillStyle = grad;
+    each((t, x, y) => g.fillText(t, x, y));
     const pg = pc.getContext("2d"); pg.imageSmoothingEnabled = false; pg.clearRect(0, 0, pc.width, pc.height);
-    pg.drawImage(low, ox, oy + dh * 0.79, lw * cell, lh * cell);
+    pg.drawImage(low, bx, oy + dh * 0.79, lw * cell, lh * cell);
   };
-  const go = () => { try { drawLine(); } catch (e) {} };
-  (document.fonts && document.fonts.load ? document.fonts.load(LF.w + " 40px '" + LF.f + "'") : Promise.resolve()).then(go, go);
+  const go = () => { if (!pc.isConnected) return; try { drawLine(); } catch (e) {} };
+  // the line's web font must be in before it is drawn (11-23 her iPhone drew Safari's thin script instead): ask for it with the
+  // line's own letters, keep it in use on the page, and draw again whenever fonts finish loading
+  const want = LF.w + " 40px '" + LF.f + "'";
+  try {
+    document.querySelectorAll(".linehold").forEach(el => el.remove());
+    const hold = document.createElement("span"); hold.className = "linehold"; hold.textContent = line; hold.setAttribute("aria-hidden", "true");
+    hold.style.cssText = "position:absolute;left:-9999px;top:0;opacity:0;pointer-events:none;white-space:nowrap;font:" + want;
+    document.body.appendChild(hold);
+  } catch (e) {}
+  go();
+  if (document.fonts) {
+    if (document.fonts.load) document.fonts.load(want, line).then(go, go);
+    if (document.fonts.ready) document.fonts.ready.then(go, go);
+    if (document.fonts.addEventListener) document.fonts.addEventListener("loadingdone", go);
+  }
+  [300, 1000, 2500, 5000].forEach(t => setTimeout(go, t));
   window.addEventListener("resize", go);
   pv.addEventListener("loadedmetadata", go);
   document.body.style.background = "#000"; document.documentElement.style.setProperty("--bg", "#000");
