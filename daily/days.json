@@ -5,5 +5,11 @@
   "sha256": "e870e151edf719603b82bacb7cb2aa897ba0dc18378bf46dfc3ea670cb8f77ee",
   "style": "trippy",
   "font": "Caveat"
+ },
+ "2026-11-25": {
+  "v": "vid/magenta-fine.mp4",
+  "line": "Nothing about your beauty is quiet. You're perfect, angelic and so pretty it's loud.",
+  "sha256": "c5acc1ba87b11662a5202f50b1e4c4bb54cee6625d8672de5329cbb120ce72bf",
+  "style": "fine"
  }
 }
