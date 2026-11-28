@@ -24,5 +24,13 @@
   "sha256": "8c3b5b34fbf21ac0450bdcb8743c62bef2f3a1043e24cfa5e1676e33ad608e50",
   "style": "fine",
   "font": "Caveat"
+ },
+ "2026-11-28": {
+  "v": "vid/daily/2026-11-28.mp4",
+  "line": "Some beauty is loud. Yours is quiet, and it stays",
+  "sha256": "b64e0b921902b5d6cdd951ec0223a4a627d7fb555811efd4c0df26ac7a5e95d8",
+  "style": "window",
+  "font": "Caveat",
+  "pick": "rust-cloud-mum"
  }
 }
